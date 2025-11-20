@@ -5,7 +5,6 @@ import pandas as pd
 import subprocess
 from pathlib import Path
 import sys
-import os
 
 
 def download_sra_from_csv(csv_file, output_dir="data/raw"):
