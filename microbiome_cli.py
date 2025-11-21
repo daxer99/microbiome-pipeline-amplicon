@@ -20,7 +20,7 @@ from modules.qiime2_utils import create_fasta_manifest, import_to_qiime2, check_
 from modules.quality_control import QualityControl
 from modules.denoiser import Denoiser
 from modules.taxa import import_database_to_qiime2, taxa_assigner
-
+from modules.phylogeny import make_phylogeny
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -38,13 +38,14 @@ def cli(ctx, version):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         click.echo("\n📋 Comandos disponibles:")
-        click.echo("  download    Descargar secuencias SRA desde CSV")
-        click.echo("  create_manifest    Crear archivo de manifiesto para QIIME2")
-        click.echo("  import_sample_seqs    Importar secuencias a QIIME2")
-        click.echo("  quality_control    Control de calidad completo")
-        click.echo("  run-deblur    Denoising con Deblur")
-        click.echo("  import_reference_database    Importar base de datos de referencia a Qiime2")
-        click.echo("  assign_taxonomy    Asignar OTUs/ASVs a taxones")
+        click.echo("  download               Descargar secuencias SRA desde CSV")
+        click.echo("  create-manifest        Crear archivo de manifiesto para QIIME2")
+        click.echo("  import-sample-seqs     Importar secuencias a QIIME2")
+        click.echo("  quality-control        Control de calidad completo")
+        click.echo("  run-deblur             Denoising con Deblur")
+        click.echo("  import-reference-database  Importar base de datos de referencia a Qiime2")
+        click.echo("  assign-taxonomy        Asignar OTUs/ASVs a taxones")
+        click.echo("  build-phylogeny         Generar árbol filogenético")
         click.echo("\n💡 Usa 'microbiome_cli.py COMANDO --help' para ayuda específica")
 
 
@@ -268,6 +269,42 @@ def assign_taxonomy(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus
         click.echo(f"   - taxa_barplot.qzv (visualización QIIME2)")
     except Exception as e:
         click.echo(f"❌ Error en asignación taxonómica: {str(e)}")
+
+@cli.command()
+@click.argument('rep_seqs', type=click.Path(exists=True))
+@click.option('--output-dir', default='results/phylogeny',
+              help='Directorio de salida (por defecto: results/phylogeny)')
+def build_phylogeny(rep_seqs, output_dir):
+    """Generar árbol filogenético a partir de secuencias representativas
+
+    REP_SEQS: Ruta al artefacto QIIME2 de secuencias representativas (.qza)
+
+    Genera dos árboles filogenéticos:
+      - unrooted_tree.qza: Árbol filogenético sin raíz
+      - rooted_tree.qza: Árbol filogenético con raíz
+
+    El proceso incluye:
+      - Alineamiento múltiple con MAFFT
+      - Construcción de árbol con FastTree
+      - Enraizamiento del árbol
+
+    Ejemplos:
+      microbiome_cli.py make-phylogeny rep-seqs.qza
+      microbiome_cli.py make-phylogeny rep-seqs.qza --output-dir my_phylogeny
+    """
+    click.echo(f"🌳 Generando árbol filogenético...")
+    click.echo(f"🧬 Secuencias representativas: {rep_seqs}")
+    click.echo(f"📁 Directorio de salida: {output_dir}")
+
+    try:
+        unrooted_path, rooted_path = make_phylogeny(rep_seqs, output_dir)
+        click.echo(f"✅ Árbol filogenético generado exitosamente:")
+        click.echo(f"   - Árbol sin raíz: {unrooted_path}")
+        click.echo(f"   - Árbol con raíz: {rooted_path}")
+        click.echo(f"🌿 Los árboles están listos para análisis de diversidad filogenética")
+    except Exception as e:
+        click.echo(f"❌ Error generando árbol filogenético: {str(e)}")
+
 
 
 if __name__ == '__main__':
