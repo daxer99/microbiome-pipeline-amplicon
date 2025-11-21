@@ -1,10 +1,8 @@
 """
-Utilidades para QIIME2 - Generación de manifest files
+Utilidades para QIIME2
 """
 import pandas as pd
 from pathlib import Path
-import os
-import subprocess
 from qiime2 import Artifact
 
 

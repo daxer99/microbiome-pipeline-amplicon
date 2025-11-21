@@ -1,5 +1,5 @@
 """
-Módulo para denoising con DADA2 y Deblur
+Módulo para denoising con Deblur
 """
 from pathlib import Path
 from qiime2 import Artifact
@@ -86,52 +86,4 @@ class Denoiser:
 
         except Exception as e:
             print(f"❌ Error en Deblur: {e}")
-            return None
-
-    def run_quality_filter(self, output_dir="results/quality_filtered", min_quality=20):
-        """
-        Filtrado de calidad básico antes de Deblur o DADA2
-
-        Args:
-            output_dir: Directorio de salida
-            min_quality: Calidad mínima promedio
-        """
-        from qiime2.plugins.quality_filter.methods import q_score
-
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        print("🔧 Aplicando filtrado de calidad...")
-
-        try:
-            # Filtrado por calidad
-            quality_result = q_score(
-                demux=self.demux_seqs,
-                min_quality=min_quality,
-                quality_window=3,
-                min_length_fraction=0.75,
-                max_ambiguous=0
-            )
-
-            # Guardar resultados filtrados
-            filtered_seqs = quality_result.filtered_sequences
-            filtered_stats = quality_result.filter_stats
-
-            filtered_path = output_path / "filtered_seqs.qza"
-            stats_path = output_path / "filter_stats.qza"
-
-            filtered_seqs.save(str(filtered_path))
-            filtered_stats.save(str(stats_path))
-
-            print("✅ Filtrado de calidad completado:")
-            print(f"   • Secuencias filtradas: {filtered_path}")
-            print(f"   • Estadísticas de filtrado: {stats_path}")
-
-            return {
-                'filtered_seqs': filtered_path,
-                'filter_stats': stats_path
-            }
-
-        except Exception as e:
-            print(f"❌ Error en filtrado de calidad: {e}")
             return None

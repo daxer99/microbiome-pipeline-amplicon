@@ -167,23 +167,3 @@ def check_dependencies():
         return False
 
     return True
-
-
-def get_download_stats(output_dir):
-    """Muestra estadísticas de los archivos descargados"""
-    output_path = Path(output_dir)
-
-    if not output_path.exists():
-        print("❌ El directorio de salida no existe")
-        return
-
-    fastq_files = list(output_path.rglob("*.fastq"))
-    sra_files = list(output_path.rglob("*.sra"))
-
-    print(f"\n📊 Estadísticas de descarga:")
-    print(f"   • Archivos FASTQ: {len(fastq_files)}")
-    print(f"   • Archivos SRA restantes: {len(sra_files)}")
-
-    # Tamaño total de FASTQ
-    total_size = sum(f.stat().st_size for f in fastq_files)
-    print(f"   • Espacio usado por FASTQ: {total_size / (1024 ** 3):.2f} GB")

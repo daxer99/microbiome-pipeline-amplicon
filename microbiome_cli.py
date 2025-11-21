@@ -19,6 +19,7 @@ from modules.downloader import download_sra_from_csv, check_dependencies
 from modules.qiime2_utils import create_fasta_manifest, import_to_qiime2, check_qiime2_installation
 from modules.quality_control import QualityControl
 from modules.denoiser import Denoiser
+from modules.taxa import import_database_to_qiime2, taxa_assigner
 
 
 @click.group(invoke_without_command=True)
@@ -37,11 +38,13 @@ def cli(ctx, version):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         click.echo("\n📋 Comandos disponibles:")
-        click.echo("  download         Descargar secuencias SRA desde CSV")
-        click.echo("  create-manifest  Crear archivo de manifiesto para QIIME2")
-        click.echo("  import-qiime2    Importar datos a QIIME2")
-        click.echo("  quality-control  Control de calidad completo")
-        click.echo("  run-deblur       Denoising con Deblur")
+        click.echo("  download    Descargar secuencias SRA desde CSV")
+        click.echo("  create_manifest    Crear archivo de manifiesto para QIIME2")
+        click.echo("  import_sample_seqs    Importar secuencias a QIIME2")
+        click.echo("  quality_control    Control de calidad completo")
+        click.echo("  run-deblur    Denoising con Deblur")
+        click.echo("  import_reference_database    Importar base de datos de referencia a Qiime2")
+        click.echo("  assign_taxonomy    Asignar OTUs/ASVs a taxones")
         click.echo("\n💡 Usa 'microbiome_cli.py COMANDO --help' para ayuda específica")
 
 
@@ -96,7 +99,7 @@ def create_manifest(input_dir, output_file):
 @click.argument('manifest_file', type=click.Path(exists=True))
 @click.option('--output-dir', default='data/qiime2',
               help='Directorio de salida para artefactos QIIME2 (por defecto: data/qiime2)')
-def import_qiime2(manifest_file, output_dir):
+def import_sample_seqs(manifest_file, output_dir):
     """Importar datos a QIIME2 desde archivo de manifiesto
 
     MANIFEST_FILE: Ruta al archivo de manifiesto CSV
@@ -196,6 +199,75 @@ def run_deblur(demux_file, output_dir, left_trim_len, trim_length, min_reads, mi
 
     if result:
         click.echo("🎉 Proceso de denoising con Deblur completado exitosamente!")
+
+@cli.command()
+@click.argument('filename_seq', type=click.Path(exists=True))
+@click.argument('filename_taxa', type=click.Path(exists=True))
+@click.option('--output-dir', default='ref_database',
+              help='Directorio de salida (por defecto: ref_database)')
+def import_reference_database(filename_seq, filename_taxa, output_dir):
+    """Importar a Qiime2 una base de datos de referencia
+
+    FILENAME_SEQ: Ruta al archivo de secuencias de la base de datos de referencia
+    FILENAME_TAXA: Ruta al archivo de taxonomías de la base de datos de referencia
+
+    Ejemplos:
+      microbiome_cli.py import-reference-database ref_seqs.fna ref_taxa.txt
+      microbiome_cli.py import-reference-database ref_seqs.fna ref_taxa.txt --output-dir my_ref_db
+    """
+    click.echo(f"📚 Importando base de datos de referencia...")
+    click.echo(f"🧬 Secuencias: {filename_seq}")
+    click.echo(f"📊 Taxonomías: {filename_taxa}")
+    click.echo(f"📁 Directorio de salida: {output_dir}")
+
+    try:
+        seq_path, taxa_path = import_database_to_qiime2(filename_seq, filename_taxa, output_dir)
+        click.echo(f"✅ Base de datos importada exitosamente:")
+        click.echo(f"   - Secuencias: {seq_path}")
+        click.echo(f"   - Taxonomías: {taxa_path}")
+    except Exception as e:
+        click.echo(f"❌ Error importando base de datos: {str(e)}")
+
+@cli.command()
+@click.argument('table', type=click.Path(exists=True))
+@click.argument('rep_seqs', type=click.Path(exists=True))
+@click.argument('seqs_ref', type=click.Path(exists=True))
+@click.argument('taxa_ref', type=click.Path(exists=True))
+@click.argument('metadata_filename', type=click.Path(exists=True))
+@click.option('--cpus', default=1, help='Número de CPUs a usar (por defecto: 1)')
+@click.option('--output-dir', default='results/taxonomy',
+              help='Directorio de salida (por defecto: results/taxonomy)')
+def assign_taxonomy(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus, output_dir):
+    """Asignación taxonómica y generación de archivos CSV por nivel taxonómico
+
+    TABLE: Ruta al artefacto QIIME2 de la tabla de características (.qza)
+    REP_SEQS: Ruta al artefacto QIIME2 de secuencias representativas (.qza)
+    SEQS_REF: Ruta al artefacto QIIME2 de secuencias de referencia (.qza)
+    TAXA_REF: Ruta al artefacto QIIME2 de taxonomía de referencia (.qza)
+    METADATA_FILENAME: Ruta al archivo de metadatos (TSV) para QIIME2
+
+    Ejemplos:
+      microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv
+      microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv --cpus 4 --output-dir my_taxa
+    """
+    click.echo(f"🔍 Asignando taxonomía...")
+    click.echo(f"📊 Tabla de características: {table}")
+    click.echo(f"🧬 Secuencias representativas: {rep_seqs}")
+    click.echo(f"📚 Secuencias de referencia: {seqs_ref}")
+    click.echo(f"📚 Taxonomía de referencia: {taxa_ref}")
+    click.echo(f"📋 Metadatos: {metadata_filename}")
+    click.echo(f"⚡ CPUs: {cpus}")
+    click.echo(f"📁 Directorio de salida: {output_dir}")
+
+    try:
+        result = taxa_assigner(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus, output_dir)
+        click.echo(f"✅ {result}")
+        click.echo(f"📈 Archivos CSV generados:")
+        click.echo(f"   - phylum.csv, class.csv, order.csv")
+        click.echo(f"   - family.csv, genus.csv, species.csv")
+        click.echo(f"   - taxa_barplot.qzv (visualización QIIME2)")
+    except Exception as e:
+        click.echo(f"❌ Error en asignación taxonómica: {str(e)}")
 
 
 if __name__ == '__main__':
