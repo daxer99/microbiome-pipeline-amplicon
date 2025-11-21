@@ -8,11 +8,19 @@ Pipeline completo para análisis de datos de microbioma 16S:
 - Importación a QIIME2
 - Control de calidad y filtrado
 - Denoising con Deblur
+- Importación de bases de datos de referencia
+- Asignación taxonómica
+- Generación de árboles filogenéticos
+- Cálculo de diversidad alfa
 
 Ejemplos de uso:
   python microbiome_cli.py download samples.csv
   python microbiome_cli.py quality-control demux.qza
   python microbiome_cli.py run-deblur demux.qza --trim-length 250
+  python microbiome_cli.py import-reference-database seqs.fna taxa.txt
+  python microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv
+  python microbiome_cli.py build-phylogeny rep-seqs.qza
+  python microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon,faith_pd
 """
 import click
 from modules.downloader import download_sra_from_csv, check_dependencies
@@ -21,6 +29,7 @@ from modules.quality_control import QualityControl
 from modules.denoiser import Denoiser
 from modules.taxa import import_database_to_qiime2, taxa_assigner
 from modules.phylogeny import make_phylogeny
+from modules.alpha_diversity import calculate_alpha_diversity
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -46,6 +55,7 @@ def cli(ctx, version):
         click.echo("  import-reference-database  Importar base de datos de referencia a Qiime2")
         click.echo("  assign-taxonomy        Asignar OTUs/ASVs a taxones")
         click.echo("  build-phylogeny         Generar árbol filogenético")
+        click.echo("  alpha-diversity        Calcular métricas de diversidad alfa")
         click.echo("\n💡 Usa 'microbiome_cli.py COMANDO --help' para ayuda específica")
 
 
@@ -305,7 +315,56 @@ def build_phylogeny(rep_seqs, output_dir):
     except Exception as e:
         click.echo(f"❌ Error generando árbol filogenético: {str(e)}")
 
+@cli.command()
+@click.argument('table', type=click.Path(exists=True))
+@click.option('--metrics', default='observed_features,shannon,chao1',
+              help='Métricas de diversidad alfa separadas por comas (por defecto: observed_features,shannon,faith_pd)')
+@click.option('--rooted-tree', type=click.Path(exists=True),
+              help='Ruta al árbol filogenético enraizado (.qza) (necesario para faith_pd)')
+@click.option('--output-dir', default='results/alpha_diversity',
+              help='Directorio de salida (por defecto: results/alpha_diversity)')
+def alpha_diversity(table, metrics, rooted_tree, output_dir):
+    """Calcular métricas de diversidad alfa
 
+    TABLE: Ruta al artefacto QIIME2 de la tabla de características (.qza)
+
+    Métricas disponibles:
+      - observed_features: Número de características únicas observadas
+      - shannon: Índice de diversidad de Shannon
+      - faith_pd: Faith's Phylogenetic Diversity (requiere árbol enraizado)
+      - simpson: Índice de diversidad de Simpson
+      - pielou: Uniformidad de Pielou
+      - chao1: Estimador de riqueza de Chao1
+
+    Ejemplos:
+      microbiome_cli.py alpha-diversity table.qza
+      microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon
+      microbiome_cli.py alpha-diversity table.qza --metrics faith_pd --rooted-tree rooted_tree.qza
+      microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon,simpson --output-dir my_alpha
+    """
+    click.echo(f"📊 Calculando diversidad alfa...")
+    click.echo(f"📈 Tabla de características: {table}")
+    click.echo(f"📏 Métricas: {metrics}")
+    if rooted_tree:
+        click.echo(f"🌳 Árbol enraizado: {rooted_tree}")
+    click.echo(f"📁 Directorio de salida: {output_dir}")
+
+    # Convertir la cadena de métricas en una lista
+    metrics_list = [m.strip() for m in metrics.split(',')]
+
+    # Verificar que si se incluye faith_pd, se proporcione un árbol enraizado
+    if 'faith_pd' in metrics_list and not rooted_tree:
+        click.echo("❌ Error: La métrica 'faith_pd' requiere un árbol filogenético enraizado. Use --rooted-tree.")
+        return
+
+    try:
+        output_files = calculate_alpha_diversity(table, metrics_list, output_dir, rooted_tree)
+        click.echo(f"✅ Diversidad alfa calculada exitosamente:")
+        for file_path in output_files:
+            click.echo(f"   - {file_path}")
+        click.echo(f"📈 Archivos CSV generados para cada métrica de diversidad alfa")
+    except Exception as e:
+        click.echo(f"❌ Error calculando diversidad alfa: {str(e)}")
 
 if __name__ == '__main__':
     cli()
