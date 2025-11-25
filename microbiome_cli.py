@@ -37,7 +37,7 @@ from modules.taxa import import_database_to_qiime2, taxa_assigner
 from modules.phylogeny import make_phylogeny
 from modules.alpha_diversity import calculate_alpha_diversity
 from modules.beta_diversity import calculate_beta_diversity, calculate_phylogenetic_beta_diversity, plot_pcoa
-from modules.picrust2 import run_picrust2, filter_low_abundance_pathways, normalize_pathway_abundance
+from modules.picrust2 import run_picrust2, normalize_pathway_abundance
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -472,11 +472,9 @@ def beta_diversity(table, metrics, phylo_metrics, rooted_tree, metadata, hue, ou
 @click.argument('table', type=click.Path(exists=True))
 @click.argument('rep_seqs', type=click.Path(exists=True))
 @click.option('--threads', default=1, help='Número de hilos a usar (por defecto: 1)')
-@click.option('--min-abundance', default=0.001,
-              help='Abundancia mínima para filtrar rutas metabólicas (por defecto: 0.001)')
 @click.option('--output-dir', default='results/picrust2',
               help='Directorio de salida (por defecto: results/picrust2)')
-def predict_metabolic_pathways(table, rep_seqs, threads, min_abundance, output_dir):
+def predict_metabolic_pathways(table, rep_seqs, threads, output_dir):
     """Inferir rutas metabólicas usando PICRUSt2
 
     TABLE: Ruta al artefacto QIIME2 de la tabla de características (.qza)
@@ -488,13 +486,12 @@ def predict_metabolic_pathways(table, rep_seqs, threads, min_abundance, output_d
     Ejemplos:
       microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza
       microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --threads 4
-      microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --min-abundance 0.01 --output-dir my_picrust2
+      microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --output-dir my_picrust2
     """
     click.echo(f"🔬 Inferiendo rutas metabólicas con PICRUSt2...")
     click.echo(f"📊 Tabla de características: {table}")
     click.echo(f"🧬 Secuencias representativas: {rep_seqs}")
     click.echo(f"⚡ Hilos: {threads}")
-    click.echo(f"📈 Abundancia mínima: {min_abundance}")
     click.echo(f"📁 Directorio de salida: {output_dir}")
 
     try:
@@ -508,17 +505,8 @@ def predict_metabolic_pathways(table, rep_seqs, threads, min_abundance, output_d
         # Ejecutar PICRUSt2
         results = run_picrust2(table, rep_seqs, output_dir, threads)
 
-        # Filtrar rutas de baja abundancia
-        filtered_pathways = filter_low_abundance_pathways(
-            results['pathway_abundance_qza'],
-            min_abundance
-        )
-
-        # Guardar tabla filtrada
-        filtered_pathways.save(os.path.join(output_dir, 'pathway_abundance_filtered.qza'))
-
         # Normalizar abundancias
-        normalized_df = normalize_pathway_abundance(filtered_pathways)
+        normalized_df = normalize_pathway_abundance(results['pathway_abundance_qza'])
         normalized_csv = os.path.join(output_dir, 'pathway_abundance_normalized.csv')
         normalized_df.to_csv(normalized_csv)
 
@@ -526,16 +514,11 @@ def predict_metabolic_pathways(table, rep_seqs, threads, min_abundance, output_d
         click.echo(f"   - Abundancia de rutas (BIOM): {results['pathway_abundance_biom']}")
         click.echo(f"   - Abundancia de rutas (TSV): {results['pathway_abundance_tsv']}")
         click.echo(f"   - Abundancia de rutas (QZA): {results['pathway_abundance_qza']}")
-        click.echo(f"   - Rutas filtradas (QZA): {output_dir}/pathway_abundance_filtered.qza")
         click.echo(f"   - Rutas normalizadas (CSV): {normalized_csv}")
         click.echo(f"📈 Se identificaron {len(normalized_df)} rutas metabólicas")
 
     except Exception as e:
         click.echo(f"❌ Error en la inferencia de rutas metabólicas: {str(e)}")
-        click.echo("🔍 Solución de problemas:")
-        click.echo("   1. Verifica que PICRUSt2 esté instalado: conda install -c bioconda picrust2")
-        click.echo("   2. Asegúrate de que las secuencias sean del gen 16S")
-        click.echo("   3. Verifica que la tabla y las secuencias correspondan a las mismas muestras")
 
 if __name__ == '__main__':
     cli()

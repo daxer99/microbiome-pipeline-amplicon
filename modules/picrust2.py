@@ -33,12 +33,15 @@ def run_picrust2(table, rep_seqs, output_dir, threads=1):
     Returns:
         dict: Rutas a los archivos de salida.
     """
-    # Si el directorio de salida existe, eliminarlo
+    # Convertir a ruta absoluta para evitar problemas
+    output_dir = os.path.abspath(output_dir)
+
+    # Si el directorio de salida existe, eliminarlo completamente
     if os.path.exists(output_dir):
         click.echo(f"🗑️  Eliminando directorio existente: {output_dir}")
         shutil.rmtree(output_dir)
 
-    os.makedirs(output_dir, exist_ok=True)
+    # NO crear el directorio aquí - PICRUSt2 lo crea automáticamente
 
     # Verificar que PICRUSt2 esté instalado
     if not check_picrust2_installation():
@@ -109,64 +112,74 @@ def run_picrust2(table, rep_seqs, output_dir, threads=1):
             raise RuntimeError(error_msg)
 
     # Verificar que los archivos de salida se crearon
-    pathway_abundance_biom = os.path.join(output_dir, 'pathway_abundance.biom')
-    if not os.path.exists(pathway_abundance_biom):
-        # Buscar otros posibles nombres de archivo
-        biom_files = [f for f in os.listdir(output_dir) if f.endswith('.biom')]
-        if biom_files:
-            pathway_abundance_biom = os.path.join(output_dir, biom_files[0])
+    # PICRUSt2 guarda los resultados en el subdirectorio 'pathways_out'
+    pathways_out_dir = os.path.join(output_dir, 'pathways_out')
+    pathway_abundance_tsv_picrust = os.path.join(pathways_out_dir, 'path_abun_unstrat.tsv.gz')
+
+    # Si no existe el archivo .gz, buscar el archivo sin comprimir
+    if not os.path.exists(pathway_abundance_tsv_picrust):
+        pathway_abundance_tsv_picrust = os.path.join(pathways_out_dir, 'path_abun_unstrat.tsv')
+
+    if not os.path.exists(pathway_abundance_tsv_picrust):
+        # Buscar cualquier archivo TSV o TSV.GZ en pathways_out
+        if os.path.exists(pathways_out_dir):
+            tsv_files = [f for f in os.listdir(pathways_out_dir)
+                         if f.endswith('.tsv') or f.endswith('.tsv.gz')]
+            if tsv_files:
+                pathway_abundance_tsv_picrust = os.path.join(pathways_out_dir, tsv_files[0])
+            else:
+                all_files = os.listdir(pathways_out_dir)
+                raise FileNotFoundError(
+                    f"No se encontraron archivos TSV o TSV.GZ en {pathways_out_dir}. "
+                    f"Archivos encontrados: {all_files}"
+                )
         else:
-            # Listar todos los archivos en el directorio para diagnóstico
             all_files = os.listdir(output_dir)
             raise FileNotFoundError(
-                f"No se encontró el archivo pathway_abundance.biom en {output_dir}. "
+                f"No se encontró el directorio pathways_out en {output_dir}. "
                 f"Archivos encontrados: {all_files}"
             )
 
-    # Convertir el archivo BIOM de rutas a artefacto QIIME2
+    # Convertir el archivo TSV de rutas a formato BIOM y luego a artefacto QIIME2
     pathway_abundance_qza = os.path.join(output_dir, 'pathway_abundance.qza')
-    try:
-        pathway_abundance = Artifact.import_data('FeatureTable[Frequency]', pathway_abundance_biom)
-        pathway_abundance.save(pathway_abundance_qza)
-    except Exception as e:
-        raise RuntimeError(f"Error importing BIOM to QIIME2: {str(e)}")
+    pathway_abundance_tsv_output = os.path.join(output_dir, 'pathway_abundance.tsv')
 
-    # También generar el archivo TSV
-    pathway_abundance_tsv = os.path.join(output_dir, 'pathway_abundance.tsv')
     try:
-        table_biom = biom.load_table(pathway_abundance_biom)
-        with open(pathway_abundance_tsv, 'w') as f:
-            table_biom.to_tsv(header_key='KEGG_Pathways', header_value='KEGG_Pathways', direct_io=f)
+        # Leer el TSV de PICRUSt2 (soporta archivos .gz automáticamente)
+        click.echo(f"📖 Leyendo archivo: {pathway_abundance_tsv_picrust}")
+
+        # pandas.read_csv detecta automáticamente archivos .gz
+        df = pd.read_csv(pathway_abundance_tsv_picrust, sep='\t', index_col=0)
+        click.echo(f"✅ Se encontraron {len(df)} rutas metabólicas en {len(df.columns)} muestras")
+
+        # Guardar una copia del TSV en el directorio principal (sin comprimir)
+        df.to_csv(pathway_abundance_tsv_output, sep='\t')
+        click.echo(f"✅ TSV guardado: {pathway_abundance_tsv_output}")
+
+        # Convertir a formato BIOM
+        pathway_abundance_biom_output = os.path.join(output_dir, 'pathway_abundance.biom')
+        table = biom.Table(df.values, observation_ids=df.index.tolist(),
+                           sample_ids=df.columns.tolist())
+        with biom.util.biom_open(pathway_abundance_biom_output, 'w') as f:
+            table.to_hdf5(f, "PICRUSt2 pathway abundance")
+        click.echo(f"✅ BIOM guardado: {pathway_abundance_biom_output}")
+
+        # Importar a QIIME2
+        pathway_abundance = Artifact.import_data('FeatureTable[Frequency]', pathway_abundance_biom_output)
+        pathway_abundance.save(pathway_abundance_qza)
+        click.echo(f"✅ Artefacto QIIME2 guardado: {pathway_abundance_qza}")
+
     except Exception as e:
-        print(f"Warning: Could not create TSV file: {str(e)}")
+        import traceback
+        error_details = traceback.format_exc()
+        raise RuntimeError(f"Error procesando resultados de PICRUSt2: {str(e)}\n{error_details}")
 
     return {
-        'pathway_abundance_biom': pathway_abundance_biom,
-        'pathway_abundance_tsv': pathway_abundance_tsv,
-        'pathway_abundance_qza': pathway_abundance_qza
+        'pathway_abundance_biom': pathway_abundance_biom_output,
+        'pathway_abundance_tsv': pathway_abundance_tsv_output,
+        'pathway_abundance_qza': pathway_abundance_qza,
+        'pathways_out_dir': pathways_out_dir
     }
-
-
-def filter_low_abundance_pathways(pathway_table, min_abundance=0.001):
-    """Filtra rutas metabólicas de baja abundancia.
-
-    Args:
-        pathway_table: Ruta al artefacto QIIME2 de rutas metabólicas.
-        min_abundance: Abundancia mínima para mantener una ruta.
-
-    Returns:
-        Artefacto QIIME2 filtrado.
-    """
-    if isinstance(pathway_table, str):
-        pathway_table = Artifact.load(pathway_table)
-
-    # Filtrar características con baja abundancia
-    filtered_table = filter_features(
-        table=pathway_table,
-        min_frequency=min_abundance
-    )
-
-    return filtered_table.filtered_table
 
 
 def normalize_pathway_abundance(pathway_table):
@@ -181,18 +194,8 @@ def normalize_pathway_abundance(pathway_table):
     if isinstance(pathway_table, str):
         pathway_table = Artifact.load(pathway_table)
 
-    # Exportar a DataFrame temporal
-    with tempfile.TemporaryDirectory() as tmpdir:
-        pathway_table.export_data(tmpdir)
-        data_dir_fp = pathlib.Path(tmpdir)
-        csv_files = list(data_dir_fp.glob('*.tsv'))
-        if not csv_files:
-            csv_files = list(data_dir_fp.glob('*.csv'))
-        if not csv_files:
-            raise FileNotFoundError(f"No se encontraron archivos TSV o CSV en {tmpdir}")
-
-        csv_file = csv_files[0]
-        df = pd.read_csv(csv_file, sep='\t', index_col=0)
+    # Obtener la tabla como DataFrame usando view()
+    df = pathway_table.view(pd.DataFrame)
 
     # Normalizar a porcentajes por muestra
     df_normalized = df.div(df.sum(axis=0), axis=1) * 100
