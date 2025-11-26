@@ -79,10 +79,9 @@ def download(csv_file, output_dir, accession_col):
 
     CSV_FILE: Ruta al archivo CSV que contiene los accessions SRA
 
-    Ejemplos:
-      microbiome_cli.py download samples.csv
-      microbiome_cli.py download samples.csv --output-dir my_data
-      microbiome_cli.py download samples.csv --accession-col sample_id
+    Ejemplos: \n
+      python microbiome_cli.py download samples.csv --output-dir my_data \n
+      python microbiome_cli.py download samples.csv --accession-col sample_id --output-dir my_data
     """
     if not check_dependencies():
         return
@@ -105,10 +104,8 @@ def create_manifest(input_dir, output_file):
     Busca automáticamente archivos FASTQ en el directorio de entrada
     y genera un manifiesto en formato CSV compatible con QIIME2.
 
-    Ejemplos:
-      microbiome_cli.py create-manifest
-      microbiome_cli.py create-manifest --input-dir my_data
-      microbiome_cli.py create-manifest --output-file my_manifest.csv
+    Ejemplos: \n
+      python microbiome_cli.py create-manifest --input-dir my_data --output-file my_manifest.csv
     """
     click.echo(f"🔍 Buscando FASTQ en: {input_dir}")
     click.echo(f"📄 Creando manifiesto: {output_file}")
@@ -128,9 +125,8 @@ def import_sample_seqs(manifest_file, output_dir):
     Convierte los archivos FASTQ en un artefacto QIIME2 (.qza)
     para análisis posteriores.
 
-    Ejemplos:
-      microbiome_cli.py import-qiime2 manifest.csv
-      microbiome_cli.py import-qiime2 manifest.csv --output-dir qiime_data
+    Ejemplo: \n
+      python microbiome_cli.py import-sample-seqs manifest.csv --output-dir demux.qza
     """
     if not check_qiime2_installation():
         return
@@ -157,10 +153,9 @@ def quality_control(demux_file, output_dir, min_quality):
       - Gráficos de perfil de calidad (.png)
       - Secuencias filtradas (.qza)
 
-    Ejemplos:
-      microbiome_cli.py quality-control demux.qza
-      microbiome_cli.py quality-control demux.qza --min-quality 25
-      microbiome_cli.py quality-control demux.qza --output-dir my_qc
+    Ejemplos: \n
+      python microbiome_cli.py quality-control demux.qza --output-dir my_qc \n
+      python microbiome_cli.py quality-control demux.qza --min-quality 25 --output-dir my_qc
     """
     click.echo(f"🎯 Analizando: {demux_file}")
     click.echo(f"📁 Directorio de salida: {output_dir}")
@@ -195,10 +190,9 @@ def run_deblur(demux_file, output_dir, left_trim_len, trim_length, min_reads, mi
     Deblur es un método rápido para obtener ASVs (Amplicon Sequence Variants)
     mediante corrección de errores.
 
-    Ejemplos:
-      microbiome_cli.py run-deblur demux.qza
-      microbiome_cli.py run-deblur demux.qza --trim-length 200
-      microbiome_cli.py run-deblur demux.qza --jobs-to-start 4
+    Ejemplos: \n
+      python microbiome_cli.py run-deblur demux.qza --output-dir deblur_results \n
+      python microbiome_cli.py run-deblur demux.qza --left-trim-len 20 --trim-length 200 --jobs-to-start 8 --output-dir deblur_results
     """
     click.echo(f"🧹 Ejecutando Deblur en: {demux_file}")
     click.echo(f"📁 Directorio de salida: {output_dir}")
@@ -232,9 +226,8 @@ def import_reference_database(filename_seq, filename_taxa, output_dir):
     FILENAME_SEQ: Ruta al archivo de secuencias de la base de datos de referencia
     FILENAME_TAXA: Ruta al archivo de taxonomías de la base de datos de referencia
 
-    Ejemplos:
-      microbiome_cli.py import-reference-database ref_seqs.fna ref_taxa.txt
-      microbiome_cli.py import-reference-database ref_seqs.fna ref_taxa.txt --output-dir my_ref_db
+    Ejemplo: \n
+      python microbiome_cli.py import-reference-database ref_seqs.fna ref_taxa.txt --output-dir my_ref_db
     """
     click.echo(f"📚 Importando base de datos de referencia...")
     click.echo(f"🧬 Secuencias: {filename_seq}")
@@ -267,9 +260,8 @@ def assign_taxonomy(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus
     TAXA_REF: Ruta al artefacto QIIME2 de taxonomía de referencia (.qza)
     METADATA_FILENAME: Ruta al archivo de metadatos (TSV) para QIIME2
 
-    Ejemplos:
-      microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv
-      microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv --cpus 4 --output-dir my_taxa
+    Ejemplo: \n
+      python microbiome_cli.py assign-taxonomy table.qza rep-seqs.qza ref-seqs.qza ref-taxa.qza metadata.tsv --cpus 4 --output-dir my_taxa
     """
     click.echo(f"🔍 Asignando taxonomía...")
     click.echo(f"📊 Tabla de características: {table}")
@@ -308,9 +300,8 @@ def build_phylogeny(rep_seqs, output_dir):
       - Construcción de árbol con FastTree
       - Enraizamiento del árbol
 
-    Ejemplos:
-      microbiome_cli.py make-phylogeny rep-seqs.qza
-      microbiome_cli.py make-phylogeny rep-seqs.qza --output-dir my_phylogeny
+    Ejemplos: \n
+     python microbiome_cli.py build-phylogeny rep-seqs.qza --output-dir my_phylogeny
     """
     click.echo(f"🌳 Generando árbol filogenético...")
     click.echo(f"🧬 Secuencias representativas: {rep_seqs}")
@@ -338,19 +329,18 @@ def alpha_diversity(table, metrics, rooted_tree, output_dir):
 
     TABLE: Ruta al artefacto QIIME2 de la tabla de características (.qza)
 
-    Métricas disponibles:
-      - observed_features: Número de características únicas observadas
-      - shannon: Índice de diversidad de Shannon
-      - faith_pd: Faith's Phylogenetic Diversity (requiere árbol enraizado)
-      - simpson: Índice de diversidad de Simpson
-      - pielou: Uniformidad de Pielou
-      - chao1: Estimador de riqueza de Chao1
+    Métricas disponibles: \n
+    'ace', 'berger_parker_d', 'brillouin_d', 'chao1',
+    'chao1_ci', 'dominance', 'doubles', 'enspie', 'esty_ci', 'fisher_alpha',
+    'gini_index', 'goods_coverage', 'heip_e', 'kempton_taylor_q',
+    'lladser_pe', 'margalef', 'mcintosh_d', 'mcintosh_e', 'menhinick',
+    'michaelis_menten_fit', 'observed_features', 'osd', 'pielou_e', 'robbins',
+    'shannon', 'simpson', 'simpson_e', 'singles', 'strong' \n
 
-    Ejemplos:
-      microbiome_cli.py alpha-diversity table.qza
-      microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon
-      microbiome_cli.py alpha-diversity table.qza --metrics faith_pd --rooted-tree rooted_tree.qza
-      microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon,simpson --output-dir my_alpha
+    Ejemplos: \n
+      python microbiome_cli.py alpha-diversity table.qza --output-dir my_alpha \n
+      python microbiome_cli.py alpha-diversity table.qza --metrics observed_features,shannon --output-dir my_alpha \n
+      python microbiome_cli.py alpha-diversity table.qza --metrics faith_pd --rooted-tree rooted_tree.qza --output-dir my_alpha
     """
     click.echo(f"📊 Calculando diversidad alfa...")
     click.echo(f"📈 Tabla de características: {table}")
@@ -396,14 +386,17 @@ def beta_diversity(table, metrics, phylo_metrics, rooted_tree, metadata, hue, ou
 
     TABLE: Ruta al artefacto QIIME2 de la tabla de características (.qza)
 
-    Métricas disponibles:
-      - No filogenéticas: braycurtis, jaccard, euclidean, manhattan
+    Métricas disponibles: \n
+      - No filogenéticas: 'aitchison', 'braycurtis', 'canberra',
+    'canberra_adkins', 'chebyshev', 'cityblock', 'correlation', 'cosine',
+    'dice', 'euclidean', 'hamming', 'jaccard', 'jensenshannon', 'kulsinski',
+    'matching', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean',
+    'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule' \n
       - Filogenéticas: unweighted_unifrac, weighted_unifrac, generalized_unifrac
 
-    Ejemplos:
-      microbiome_cli.py beta-diversity table.qza --metrics braycurtis,jaccard
-      microbiome_cli.py beta-diversity table.qza --metrics braycurtis --phylo-metrics unweighted_unifrac --rooted-tree rooted_tree.qza
-      microbiome_cli.py beta-diversity table.qza --metrics braycurtis --metadata metadata.tsv --hue Treatment --output-dir my_beta
+    Ejemplos: \n
+      python microbiome_cli.py beta-diversity table.qza --metrics braycurtis --metadata metadata.tsv --hue Treatment --output-dir my_beta \n
+      python microbiome_cli.py beta-diversity table.qza --metrics braycurtis --phylo-metrics unweighted_unifrac --rooted-tree rooted_tree.qza --metadata metadata.tsv --hue Treatment --output-dir my_beta
     """
     click.echo(f"📊 Calculando diversidad beta...")
     click.echo(f"📈 Tabla de características: {table}")
@@ -483,10 +476,8 @@ def predict_metabolic_pathways(table, rep_seqs, threads, output_dir):
     PICRUSt2 predice la abundancia de rutas metabólicas basándose en la
     composición taxonómica inferida a partir de secuencias 16S.
 
-    Ejemplos:
-      microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza
-      microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --threads 4
-      microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --output-dir my_picrust2
+    Ejemplo: \n
+      python microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza --threads 4 --output-dir my_picrust2
     """
     click.echo(f"🔬 Inferiendo rutas metabólicas con PICRUSt2...")
     click.echo(f"📊 Tabla de características: {table}")

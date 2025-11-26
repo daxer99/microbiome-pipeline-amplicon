@@ -1,0 +1,39 @@
+Archivos de ejemplo:
+sra.csv
+fasta_manifest.csv
+metadata.tsv
+
+1) Descargar las muestras desde genbank
+    python microbiome_cli.py download example/sra.csv --output-dir example/samples
+
+2) Importar las muestras descargadas previamente
+    python microbiome_cli.py create-manifest --input-dir example/samples --output-file example/manifest.csv
+    python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example/demux.qza
+
+3) Control de calidad de las secuencias
+     python microbiome_cli.py quality-control example/demux.qza --output-dir example/qc
+
+4) Analisis del marcador molecular
+    python microbiome_cli.py run-deblur example/demux.qza --left-trim-len 10 --trim-length 125 --jobs-to-start 8 --output-dir example/deblur_results
+    #Alternativa
+    python microbiome_cli.py run-deblur example/qc/flitered_seqs.qza --left-trim-len 0 --trim-length 250 --jobs-to-start 8 --output-dir example/deblur_results
+
+5) Analisis filogenetico
+    python microbiome_cli.py build-phylogeny example/deblur_results/rep-seqs.qza --output-dir example/phylogeny
+
+6) Asignacion taxonomica
+    python microbiome_cli.py assign-taxonomy example/deblur_results/table.qza example/deblur_results/rep-seqs.qza ref_db/ref-seqs.qza ref_db/ref-taxa.qza example/metadata.tsv --cpus 8 --output-dir example/taxa
+
+7) Alfa diversidad
+    python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,gini_index,shannon --output-dir example/alpha
+    python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,faith_pd,shannon --rooted-tree example/phylogeny/rooted_tree.qza --output-dir example/alpha
+
+8) Beta diversidad
+    python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis --metadata example/metadata.tsv --hue subject --output-dir example/beta
+    python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis  --phylo-metrics unweighted_unifrac --rooted-tree example/phylogeny/rooted_tree.qza --metadata example/metadata.tsv --hue subject --output-dir example/beta
+
+9) Inferencia funcional
+    python microbiome_cli.py predict-metabolic-pathways example/deblur_results/table.qza example/deblur_results/rep-seqs.qza --threads 8 --output-dir example/picrust2
+
+
+
