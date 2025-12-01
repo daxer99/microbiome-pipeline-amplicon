@@ -150,3 +150,4 @@ SCRIPT
 }
 
 main
+EOF
