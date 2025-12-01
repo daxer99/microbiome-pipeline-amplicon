@@ -5,63 +5,36 @@ channels:
   - https://packages.qiime2.org/qiime2/2024.2/amplicon/released
   - defaults
 dependencies:
-  # QIIME2 Core - MUST INCLUDE q2-demux
+  # QIIME2 Essentials
   - qiime2=2024.2
   - q2cli=2024.2
   - q2-demux=2024.2
-  - q2-types=2024.2
   - q2-feature-table=2024.2
-  - q2-diversity=2024.2
   - q2-taxa=2024.2
-  - q2-phylogeny=2024.2
   - q2-deblur=2024.2
-  - q2-dada2=2024.2
   - q2-quality-control=2024.2
   - q2-quality-filter=2024.2
-  - q2-vsearch=2024.2
-  - q2-feature-classifier=2024.2
+  - q2-diversity=2024.2
 
   # PICRUSt2
   - picrust2=2.5.2
-  - biom-format=2.1.14
-  - gappa=0.8.0
-  - epa-ng=0.3.8
 
-  # Herramientas bioinformáticas esenciales
-  - fastqc
-  - multiqc
-  - cutadapt=4.6
+  # Bioinformatics tools
   - vsearch=2.22.1
-  - mafft=7.520
-  - fasttree=2.1.11
+  - cutadapt=4.6
+  - fastqc
+  - biom-format=2.1.14
 
-  # Python packages principales
-  - python=3.8.15
-  - pandas=1.5.3
-  - numpy=1.24.4
-  - scipy=1.10.0
-  - matplotlib=3.6.0
-  - seaborn=0.12.2
-  - scikit-learn=0.24.1
-  - scikit-bio=0.5.8
-  - biopython=1.83
-  - click=8.1.7
-  - jupyter
-  - jupyterlab
+  # Python
+  - python=3.8
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - click
+  - biopython
+  - scipy
 
-  # Herramientas de descarga y datos
-  - sra-tools=3.1.0
-  - entrez-direct=16.2
+  # Utilities
   - wget
   - curl
-
-  # Utilidades del sistema
-  - pigz=2.8
-  - pbzip2=1.1.13
-  - parallel
-
-  # Dependencias específicas de QIIME2
-  - deblur=1.1.1
-  - rescript=2024.2.2
-  - unifrac=1.3
-  - emperor=1.0.4
