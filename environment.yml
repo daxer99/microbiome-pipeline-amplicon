@@ -5,9 +5,10 @@ channels:
   - https://packages.qiime2.org/qiime2/2024.2/amplicon/released
   - defaults
 dependencies:
-  # QIIME2 Core (sin q2-picrust2)
+  # QIIME2 Core - MUST INCLUDE q2-demux
   - qiime2=2024.2
   - q2cli=2024.2
+  - q2-demux=2024.2
   - q2-types=2024.2
   - q2-feature-table=2024.2
   - q2-diversity=2024.2
@@ -20,7 +21,7 @@ dependencies:
   - q2-vsearch=2024.2
   - q2-feature-classifier=2024.2
 
-  # PICRUSt2 directamente (sin plugin QIIME2)
+  # PICRUSt2
   - picrust2=2.5.2
   - biom-format=2.1.14
   - gappa=0.8.0
@@ -33,11 +34,6 @@ dependencies:
   - vsearch=2.22.1
   - mafft=7.520
   - fasttree=2.1.11
-  - iqtree=2.2.6
-  - raxml=8.2.13
-  - blast=2.15.0
-  - hmmer=3.1b2
-  - sepp=4.3.10
 
   # Python packages principales
   - python=3.8.15
@@ -63,12 +59,6 @@ dependencies:
   - pigz=2.8
   - pbzip2=1.1.13
   - parallel
-
-  # R y paquetes para análisis estadístico (opcional)
-  - r-base=4.2.2
-  - r-vegan=2.6_4
-  - r-ggplot2=3.5.0
-  - r-dplyr=1.1.4
 
   # Dependencias específicas de QIIME2
   - deblur=1.1.1
