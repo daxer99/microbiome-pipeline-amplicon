@@ -1,0 +1,5 @@
+sample-id,absolute-filepath,direction
+SRR28748153,example/samples/SRR28748153/SRR28748153_1.fastq,forward
+SRR28748153,example/samples/SRR28748153/SRR28748153_2.fastq,reverse
+SRR28748154,example/samples/SRR28748154/SRR28748154_1.fastq,forward
+SRR28748154,example/samples/SRR28748154/SRR28748154_2.fastq,reverse
