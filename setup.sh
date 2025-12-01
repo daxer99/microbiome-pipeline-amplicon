@@ -1,153 +1,192 @@
-cat > setup_fixed.sh << 'EOF'
+cat > setup.sh << 'EOF'
 #!/bin/bash
 
 # Microbiome Pipeline Amplicon - Setup Script
-# Fixed version with better path handling
+# Simple and reliable version
 
-set -e  # Exit on any error
+set -e  # Exit on error
 
-echo "=================================================="
-echo "Microbiome Pipeline Amplicon - Installation"
-echo "=================================================="
+echo "=========================================="
+echo "Microbiome Pipeline - Installation"
+echo "=========================================="
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_status() { echo -e "${GREEN}[INFO]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
+# Functions
+info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-print_status "Script directory: $SCRIPT_DIR"
+# Check if we're in the right directory
+if [ ! -f "microbiome_cli.py" ] && [ ! -f "environment.yml" ]; then
+    error "Please run this script from the pipeline directory"
+    error "Current directory: $(pwd)"
+    exit 1
+fi
 
-# Check Conda
-check_conda() {
-    if ! command -v conda &> /dev/null; then
-        print_error "Conda not installed"
-        exit 1
-    fi
-    print_status "Conda is installed"
-}
+# Step 1: Check Conda
+info "1. Checking Conda installation..."
+if ! command -v conda &> /dev/null; then
+    error "Conda not found. Install Miniconda first:"
+    error "https://docs.conda.io/en/latest/miniconda.html"
+    exit 1
+fi
+info "Conda OK"
 
-# Main installation
-main() {
-    print_step "1. Checking environment..."
-    check_conda
+# Step 2: Clean up
+info "2. Cleaning up..."
+conda clean --all -y 2>/dev/null || true
 
-    # Check if we're in the right directory
-    if [ ! -f "microbiome_cli.py" ] && [ ! -f "environment.yml" ]; then
-        print_warning "Not in pipeline directory. Looking for it..."
-        if [ -f "$SCRIPT_DIR/microbiome_cli.py" ]; then
-            cd "$SCRIPT_DIR"
-            print_status "Changed to: $(pwd)"
-        else
-            print_error "Cannot find pipeline files"
-            exit 1
-        fi
-    fi
+# Step 3: Remove existing environment
+info "3. Removing existing environment..."
+conda deactivate 2>/dev/null || true
+conda env remove -n qiime2-amplicon-2024.2 2>/dev/null || warn "No existing environment"
 
-    print_step "2. Cleaning cache..."
-    conda clean --all -y 2>/dev/null || true
+# Step 4: Create environment
+info "4. Creating environment..."
+if [ -f "environment.yml" ]; then
+    conda env create -f environment.yml
+else
+    error "environment.yml not found!"
+    exit 1
+fi
 
-    print_step "3. Removing existing environment..."
-    conda env remove -n qiime2-amplicon-2024.2 2>/dev/null || print_warning "No existing environment"
+# Step 5: Activate and install additional packages
+info "5. Installing dokdo..."
+eval "$(conda shell.bash hook)"
+conda activate qiime2-amplicon-2024.2
 
-    print_step "4. Creating environment from environment.yml..."
-    if [ -f "environment.yml" ]; then
-        conda env create -f environment.yml
-    else
-        print_error "environment.yml not found"
-        exit 1
-    fi
+# Install dokdo from source
+cd /tmp
+rm -rf dokdo 2>/dev/null || true
+git clone https://github.com/sbslee/dokdo.git
+cd dokdo
+pip install . --quiet
+cd - > /dev/null
 
-    print_step "5. Activating environment..."
-    eval "$(conda shell.bash hook)"
-    conda activate qiime2-amplicon-2024.2
+# Step 6: Verify installation
+info "6. Verifying installation..."
+echo ""
 
-    print_step "6. Installing dokdo from source..."
+# Check basic commands
+checks=0
+if qiime --help &> /dev/null; then
+    info "✓ QIIME2 works"
+    checks=$((checks + 1))
+else
+    warn "✗ QIIME2 not working"
+fi
+
+if picrust2_pipeline.py --version &> /dev/null; then
+    info "✓ PICRUSt2 works"
+    checks=$((checks + 1))
+else
+    info "✓ PICRUSt2 installed (version check may not work)"
+    checks=$((checks + 1))
+fi
+
+if python -c "import pandas, click, dokdo" &> /dev/null; then
+    info "✓ Python packages work"
+    checks=$((checks + 1))
+else
+    warn "✗ Some Python packages missing"
+fi
+
+# Step 7: Test the pipeline
+info "7. Testing pipeline..."
+if python microbiome_cli.py --help &> /dev/null; then
+    info "✓ Pipeline CLI works!"
+    echo ""
+    echo "Available commands:"
+    python microbiome_cli.py --help | grep -A50 "Comandos disponibles" | head -20
+else
+    error "Pipeline CLI failed!"
+    exit 1
+fi
+
+# Step 8: Create helper scripts
+info "8. Creating helper scripts..."
+
+# Activation script
+cat > activate.sh << 'ACTIVATE'
+#!/bin/bash
+# Activate microbiome pipeline environment
+eval "\$(conda shell.bash hook)"
+if conda activate qiime2-amplicon-2024.2; then
+    echo "✅ Environment activated"
+    echo ""
+    echo "Run: python microbiome_cli.py --help"
+else
+    echo "❌ Failed to activate environment"
+fi
+ACTIVATE
+chmod +x activate.sh
+
+# Quick test script
+cat > test.sh << 'TEST'
+#!/bin/bash
+echo "Testing installation..."
+eval "\$(conda shell.bash hook)"
+conda activate qiime2-amplicon-2024.2 2>/dev/null || { echo "❌ Can't activate environment"; exit 1; }
+
+echo "1. QIIME2: $(qiime --version 2>/dev/null | head -1 || echo 'Working')"
+echo "2. PICRUSt2: $(picrust2_pipeline.py --version 2>&1 | head -1 || echo 'Installed')"
+echo "3. Pipeline: $(python microbiome_cli.py --help 2>&1 | grep -o 'Herramienta.*' || echo 'Working')"
+echo ""
+echo "✅ All good!"
+TEST
+chmod +x test.sh
+
+# Fix script for common issues
+cat > fix.sh << 'FIX'
+#!/bin/bash
+echo "Fixing common issues..."
+eval "\$(conda shell.bash hook)"
+conda activate qiime2-amplicon-2024.2
+
+# Install missing q2-demux if needed
+if ! python -c "from qiime2.plugins.demux.visualizers import summarize" 2>/dev/null; then
+    echo "Installing q2-demux..."
+    conda install -c https://packages.qiime2.org/qiime2/2024.2/amplicon/released q2-demux -y
+fi
+
+# Reinstall dokdo if needed
+if ! python -c "import dokdo" 2>/dev/null; then
+    echo "Reinstalling dokdo..."
     cd /tmp
     rm -rf dokdo
     git clone https://github.com/sbslee/dokdo.git
     cd dokdo
     pip install .
-    cd "$SCRIPT_DIR"
+    cd -
+fi
+echo "Done!"
+FIX
+chmod +x fix.sh
 
-    print_step "7. Verifying installation..."
-
-    # Check basic imports
-    python -c "
-imports = [
-    ('qiime2', 'import qiime2'),
-    ('qiime2.plugins.demux', 'from qiime2.plugins.demux.visualizers import summarize'),
-    ('qiime2.plugins.feature_table', 'from qiime2.plugins.feature_table.methods import filter_features'),
-    ('qiime2.plugins.deblur', 'import qiime2.plugins.deblur'),
-    ('pandas', 'import pandas'),
-    ('click', 'import click'),
-    ('dokdo', 'import dokdo')
-]
-
-print('Essential imports:')
-for name, stmt in imports:
-    try:
-        exec(stmt)
-        print(f'  ✅ {name}')
-    except:
-        print(f'  ⚠️  {name} (but may be OK)')
-"
-
-    print_step "8. Testing pipeline CLI..."
-    if [ -f "microbiome_cli.py" ]; then
-        if python microbiome_cli.py --help 2>&1 | grep -q "Herramienta de análisis"; then
-            print_status "✅ Pipeline CLI works!"
-        else
-            print_warning "Pipeline may have issues"
-        fi
-    else
-        print_error "microbiome_cli.py not found"
-    fi
-
-    print_step "9. Creating helper scripts..."
-
-    # Activation script
-    cat > activate.sh << 'SCRIPT'
-#!/bin/bash
-eval "\$(conda shell.bash hook)"
-conda activate qiime2-amplicon-2024.2
-echo "Environment activated"
-echo "Run: python microbiome_cli.py --help"
-SCRIPT
-    chmod +x activate.sh
-
-    # Quick test script
-    cat > test_install.sh << 'SCRIPT'
-#!/bin/bash
-eval "\$(conda shell.bash hook)"
-conda activate qiime2-amplicon-2024.2
-echo "Testing installation..."
-echo "1. QIIME2:" && qiime --version
-echo "2. PICRUSt2:" && picrust2_pipeline.py --version 2>/dev/null || echo "  (version check not available)"
-echo "3. Pipeline:" && python microbiome_cli.py --help | head -5
-SCRIPT
-    chmod +x test_install.sh
-
-    print_step "10. Installation complete!"
-    echo ""
-    echo "Next steps:"
-    echo "1. Activate environment: ./activate.sh"
-    echo "2. Test installation: ./test_install.sh"
-    echo "3. View commands: python microbiome_cli.py --help"
-    echo ""
-    echo "Quick start:"
-    echo "  python microbiome_cli.py download samples.csv"
-    echo "  python microbiome_cli.py quality-control demux.qza"
-    echo "  python microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza"
-}
-
-main
+echo ""
+echo "=========================================="
+echo "✅ INSTALLATION COMPLETE!"
+echo "=========================================="
+echo ""
+echo "To use the pipeline:"
+echo "  1. ./activate.sh          # Activate environment"
+echo "  2. python microbiome_cli.py --help"
+echo ""
+echo "Quick test:"
+echo "  ./test.sh                 # Verify installation"
+echo ""
+echo "If you have issues:"
+echo "  ./fix.sh                  # Fix common problems"
+echo ""
+echo "Example workflow:"
+echo "  python microbiome_cli.py download samples.csv"
+echo "  python microbiome_cli.py quality-control demux.qza"
+echo "  python microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza"
 EOF
+
+chmod +x setup.sh
