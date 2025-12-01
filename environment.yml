@@ -5,7 +5,7 @@ channels:
   - https://packages.qiime2.org/qiime2/2024.2/amplicon/released
   - defaults
 dependencies:
-  # QIIME2 Core
+  # QIIME2 Core (sin q2-picrust2)
   - qiime2=2024.2
   - q2cli=2024.2
   - q2-types=2024.2
@@ -19,9 +19,8 @@ dependencies:
   - q2-quality-filter=2024.2
   - q2-vsearch=2024.2
   - q2-feature-classifier=2024.2
-  - q2-picrust2=2023.2
 
-  # PICRUSt2 y análisis metabólico
+  # PICRUSt2 directamente (sin plugin QIIME2)
   - picrust2=2.5.2
   - biom-format=2.1.14
   - gappa=0.8.0
