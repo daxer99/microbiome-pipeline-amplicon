@@ -1,7 +1,4 @@
-# Crea el setup.sh CORRECTO
-cat > setup.sh << 'EOF'
 #!/bin/bash
-
 # Microbiome Pipeline - Complete Installation
 # Corrected with all necessary channels
 
@@ -228,17 +225,3 @@ echo ""
 echo "=========================================="
 info "✅ INSTALLATION COMPLETE!"
 echo "=========================================="
-echo ""
-echo "To use:"
-echo "  ./activate.sh          # Activate environment"
-echo "  python microbiome_cli.py --help"
-echo ""
-echo "Test imports:"
-echo "  ./test_imports.sh      # Verify all imports work"
-echo ""
-echo "Quick workflow:"
-echo "  1. python microbiome_cli.py download samples.csv"
-echo "  2. python microbiome_cli.py quality-control demux.qza"
-echo "  3. python microbiome_cli.py run-deblur demux.qza"
-echo "  4. python microbiome_cli.py predict-metabolic-pathways table.qza rep-seqs.qza"
-EOF
