@@ -159,7 +159,7 @@ def download_from_ena(accession, output_dir):
     sample_dir = Path(output_dir) / accession
     sample_dir.mkdir(parents=True, exist_ok=True)
 
-    # Primero, obtener las URLs reales de los archivos FASTQ desde la API de ENA
+    # Obtener URLs de FASTQ desde ENA
     fastq_urls = get_ena_fastq_urls(accession)
 
     if not fastq_urls:
@@ -201,8 +201,9 @@ def download_from_ena(accession, output_dir):
             try_download_missing_pair(accession, sample_dir, fastq_urls)
     else:
         print(f"❌ No se pudo descargar ningún archivo para {accession}")
-        print(f"💡 Puedes intentar manualmente desde:")
-        print(f"   https://www.ebi.ac.uk/ena/browser/view/{accession}")
+        print(f"💡 Intentando método de emergencia...")
+        # Último intento con método directo
+        emergency_download(accession, sample_dir)
 
 
 def get_ena_fastq_urls(accession):
@@ -211,107 +212,140 @@ def get_ena_fastq_urls(accession):
 
     try:
         # Método 1: API filereport (más confiable)
+        print(f"   Consultando API de ENA para {accession}...")
         api_url = "https://www.ebi.ac.uk/ena/portal/api/filereport"
         params = {
             'accession': accession,
             'result': 'read_run',
             'fields': 'fastq_ftp,submitted_ftp',
-            'format': 'json'
+            'format': 'json',
+            'download': 'false'
         }
 
-        response = requests.get(api_url, params=params, timeout=30)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        response = requests.get(api_url, params=params, headers=headers, timeout=30)
 
         if response.status_code == 200 and response.text.strip():
             try:
                 data = response.json()
                 if data and isinstance(data, list) and len(data) > 0:
                     # Obtener URLs de FTP
-                    ftp_field = data[0].get('fastq_ftp') or data[0].get('submitted_ftp')
+                    ftp_field = data[0].get('fastq_ftp') or data[0].get('submitted_ftp') or ''
                     if ftp_field:
-                        ftp_urls = ftp_field.split(';')
+                        ftp_urls = [url.strip() for url in ftp_field.split(';') if url.strip()]
                         for ftp_url in ftp_urls:
-                            if ftp_url.strip():
+                            if ftp_url and '.fastq.gz' in ftp_url:
+                                # Asegurarse de que tenga el protocolo FTP
+                                if not ftp_url.startswith('ftp://'):
+                                    ftp_url = 'ftp://' + ftp_url
                                 # Convertir FTP a HTTPS
-                                https_url = ftp_url.strip().replace('ftp://', 'https://')
+                                https_url = ftp_url.replace('ftp://', 'https://')
                                 urls.append(https_url)
-            except ValueError:
-                # Si no es JSON, intentar parsear como texto
-                pass
+                                print(f"   URL encontrada: {https_url}")
+            except ValueError as e:
+                print(f"   Error parseando JSON: {e}")
+                # Intentar parsear como texto plano
+                lines = response.text.strip().split('\n')
+                if len(lines) > 1:
+                    # Buscar la línea con las URLs
+                    for line in lines:
+                        if 'ftp.sra.ebi.ac.uk' in line and '.fastq.gz' in line:
+                            ftp_urls = line.split('\t')[-1].split(';')
+                            for ftp_url in ftp_urls:
+                                if ftp_url.strip() and '.fastq.gz' in ftp_url:
+                                    ftp_url = ftp_url.strip()
+                                    if not ftp_url.startswith('ftp://'):
+                                        ftp_url = 'ftp://' + ftp_url
+                                    https_url = ftp_url.replace('ftp://', 'https://')
+                                    urls.append(https_url)
+                                    print(f"   URL encontrada (texto): {https_url}")
 
-        # Si no obtuvo URLs con el método 1, intentar método 2
+        # Si no obtuvo URLs, usar método directo con patrones conocidos
         if not urls:
-            # Método 2: Web scraping de la página de ENA
-            page_url = f"https://www.ebi.ac.uk/ena/browser/api/xml/{accession}"
-            response = requests.get(page_url, timeout=30)
-
-            if response.status_code == 200:
-                # Buscar URLs de FASTQ en el XML
-                content = response.text
-
-                # Patrones para encontrar URLs de FASTQ
-                patterns = [
-                    r'<FASTQ_FILES>(.*?)</FASTQ_FILES>',
-                    r'ftp://ftp\.sra\.ebi\.ac\.uk/vol1/fastq/[^<]*\.fastq\.gz',
-                    r'https://[^<]*\.fastq\.gz'
-                ]
-
-                for pattern in patterns:
-                    matches = re.findall(pattern, content, re.IGNORECASE | re.DOTALL)
-                    for match in matches:
-                        if 'fastq' in match.lower() and 'ftp.sra.ebi.ac.uk' in match:
-                            # Convertir FTP a HTTPS
-                            https_url = match.replace('ftp://', 'https://')
-                            urls.append(https_url)
-
-        # Método 3: Patrones predefinidos basados en la estructura común de ENA
-        if not urls:
-            # Estructura común de ENA para paired-end
-            accession_6 = accession[:6]
-            accession_last3 = accession[-3:] if len(accession) > 6 else accession
-
-            # Patrones para paired-end
-            url_patterns = [
-                f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/{accession_last3}/{accession}/{accession}_1.fastq.gz",
-                f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/{accession_last3}/{accession}/{accession}_2.fastq.gz",
-                f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/00{accession_last3[-1]}/{accession}/{accession}_1.fastq.gz",
-                f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/00{accession_last3[-1]}/{accession}/{accession}_2.fastq.gz",
-            ]
-
-            # Probar cada patrón
-            for pattern in url_patterns:
-                # Verificar si la URL existe
-                try:
-                    head_response = requests.head(pattern, timeout=10, allow_redirects=True)
-                    if head_response.status_code == 200:
-                        urls.append(pattern)
-                except:
-                    pass
+            print(f"   Usando patrones conocidos para {accession}...")
+            urls = get_fastq_urls_from_patterns(accession)
 
         # Eliminar duplicados
-        urls = list(dict.fromkeys(urls))
+        unique_urls = []
+        seen_urls = set()
+        for url in urls:
+            if url not in seen_urls:
+                seen_urls.add(url)
+                unique_urls.append(url)
 
-        # Si tenemos URLs, devolverlas
-        if urls:
-            return urls
-
-        # Método 4: Usar el API de descarga directa
-        download_url = f"https://www.ebi.ac.uk/ena/portal/api/filereport?accession={accession}&result=read_run&fields=fastq_ftp&download=true"
-        response = requests.get(download_url, timeout=30)
-
-        if response.status_code == 200:
-            lines = response.text.strip().split('\n')
-            if len(lines) > 1:
-                # La segunda línea suele contener las URLs
-                fields = lines[1].split('\t')
-                if len(fields) > 0:
-                    ftp_urls = fields[-1].split(';')
-                    for ftp_url in ftp_urls:
-                        if ftp_url.strip():
-                            https_url = ftp_url.strip().replace('ftp://', 'https://')
-                            urls.append(https_url)
+        return unique_urls
 
     except Exception as e:
         print(f"   Error obteniendo URLs ENA: {str(e)[:100]}")
+        # Usar patrones conocidos como fallback
+        return get_fastq_urls_from_patterns(accession)
+
+
+def get_fastq_urls_from_patterns(accession):
+    """Genera URLs basadas en patrones comunes de ENA"""
+    urls = []
+
+    # Patrones comunes para paired-end
+    # Formato: https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR287/053/SRR28748153/SRR28748153_1.fastq.gz
+
+    # Extraer partes del accession
+    if accession.startswith('SRR'):
+        # Para SRR28748153 -> SRR287, 053
+        prefix = accession[:6]  # SRR287
+        suffix = accession[-3:]  # 053 (los últimos 3 dígitos)
+
+        # Variantes comunes
+        patterns = [
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_2.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/00{suffix[-1]}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/00{suffix[-1]}/{accession}/{accession}_2.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix[:6]}/{accession[-6:]}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix[:6]}/{accession[-6:]}/{accession}/{accession}_2.fastq.gz",
+        ]
+
+        # También probar sin el último nivel de directorio
+        patterns.extend([
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{accession}/{accession}_2.fastq.gz",
+        ])
+
+    elif accession.startswith('ERR'):
+        # Para ERR...
+        prefix = accession[:6]
+        suffix = accession[-3:]
+        patterns = [
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_2.fastq.gz",
+        ]
+    elif accession.startswith('DRR'):
+        # Para DRR...
+        prefix = accession[:6]
+        suffix = accession[-3:]
+        patterns = [
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix}/{accession}/{accession}_2.fastq.gz",
+        ]
+    else:
+        # Patrón genérico
+        patterns = [
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession[:6]}/{accession[-3:]}/{accession}/{accession}_1.fastq.gz",
+            f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession[:6]}/{accession[-3:]}/{accession}/{accession}_2.fastq.gz",
+        ]
+
+    # Probar cada patrón
+    for pattern in patterns:
+        # Verificar HEAD para ver si la URL existe
+        try:
+            response = requests.head(pattern, timeout=10, allow_redirects=True)
+            if response.status_code == 200:
+                urls.append(pattern)
+                print(f"   Patrón válido: {pattern}")
+        except:
+            pass
 
     return urls
 
@@ -320,14 +354,17 @@ def download_file_with_retry(url, filepath, max_retries=3):
     """Descarga un archivo con reintentos"""
     for attempt in range(max_retries):
         try:
+            print(f"   Intento {attempt + 1}/{max_retries} para {os.path.basename(filepath)}")
             if download_file(url, filepath):
                 return True
             else:
-                print(f"   Intento {attempt + 1} falló, reintentando...")
-                time.sleep(2)
+                if attempt < max_retries - 1:
+                    print(f"   Esperando 2 segundos antes de reintentar...")
+                    time.sleep(2)
         except Exception as e:
             print(f"   Error en intento {attempt + 1}: {str(e)[:50]}")
-            time.sleep(2)
+            if attempt < max_retries - 1:
+                time.sleep(2)
 
     return False
 
@@ -335,39 +372,52 @@ def download_file_with_retry(url, filepath, max_retries=3):
 def download_file(url, filepath):
     """Descarga un archivo desde una URL"""
     try:
-        # Usar requests con stream para manejar archivos grandes
+        # Verificar que la URL sea válida
+        if not url.startswith(('http://', 'https://')):
+            print(f"   ❌ URL inválida (falta http/https): {url[:50]}...")
+            return False
+
+        # Headers para evitar bloqueos
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
         }
 
-        response = requests.get(url, stream=True, timeout=60, headers=headers)
+        print(f"   Conectando a: {url[:80]}...")
 
-        # Si es una redirección, seguirla
-        if response.status_code in [301, 302, 303, 307, 308]:
-            redirect_url = response.headers.get('Location')
-            if redirect_url:
-                print(f"   Redireccionando a: {redirect_url[:80]}...")
-                response = requests.get(redirect_url, stream=True, timeout=60, headers=headers)
+        # Usar session para mantener conexión
+        session = requests.Session()
+        response = session.get(url, stream=True, timeout=60, headers=headers, allow_redirects=True)
+
+        # Si hay redirección
+        if response.history:
+            print(f"   Redireccionado a: {response.url[:80]}...")
 
         response.raise_for_status()
 
-        # Verificar que sea un archivo FASTQ (no HTML)
+        # Verificar que sea un archivo binario, no HTML
         content_type = response.headers.get('content-type', '').lower()
         if 'html' in content_type or 'text' in content_type:
-            # Leer un poco del contenido para verificar
+            # Leer muestra para verificar
             sample = response.content[:1000].decode('utf-8', errors='ignore')
             if '<html' in sample.lower() or '<!doctype' in sample.lower():
                 print(f"   ❌ La URL devuelve HTML, no FASTQ")
                 return False
 
-        # Obtener tamaño del archivo si está disponible
+        # Obtener tamaño
         total_size = int(response.headers.get('content-length', 0))
 
-        # Descargar con barra de progreso
+        # Descargar
         with open(filepath, 'wb') as f:
             if total_size == 0:
+                # Descarga simple
                 f.write(response.content)
+                print(f"   Descargado (tamaño desconocido)")
             else:
+                # Descarga con barra de progreso
                 chunk_size = 8192
                 with tqdm(total=total_size, unit='B', unit_scale=True,
                           desc=f"      Progreso", ncols=80, leave=False) as pbar:
@@ -376,27 +426,33 @@ def download_file(url, filepath):
                             f.write(chunk)
                             pbar.update(len(chunk))
 
-        # Verificar que el archivo no esté vacío y sea un archivo FASTQ válido
+        # Verificar archivo descargado
         file_size = os.path.getsize(filepath)
-        if file_size > 1000:
-            # Verificar que sea un archivo gzip válido (los FASTQ.gz)
+        if file_size > 10000:  # Archivo razonablemente grande
+            # Verificar que sea gzip válido
             try:
                 import gzip
                 with gzip.open(filepath, 'rb') as test_f:
-                    test_f.read(100)  # Leer primeros 100 bytes
+                    test_f.read(100)
+                print(f"   ✅ Archivo gzip válido ({file_size / 1024 / 1024:.1f} MB)")
                 return True
-            except:
-                # Puede que no sea gzip, verificar si es FASTQ plano
-                with open(filepath, 'rb') as test_f:
-                    header = test_f.read(100)
-                    if b'@' in header:  # FASTQ comienza con @
-                        return True
-                print(f"   ❌ Archivo descargado no es FASTQ válido")
+            except Exception as gzip_error:
+                # Verificar si es FASTQ sin comprimir
+                try:
+                    with open(filepath, 'rb') as test_f:
+                        header = test_f.read(100)
+                        if b'@' in header:  # Cabecera FASTQ
+                            print(f"   ✅ Archivo FASTQ sin comprimir ({file_size / 1024 / 1024:.1f} MB)")
+                            return True
+                except:
+                    pass
+
+                print(f"   ❌ Archivo no es FASTQ/gzip válido")
                 os.remove(filepath)
                 return False
         else:
+            print(f"   ❌ Archivo demasiado pequeño ({file_size} bytes)")
             os.remove(filepath)
-            print(f"   ❌ Archivo demasiado pequeño (posiblemente vacío)")
             return False
 
     except requests.exceptions.RequestException as e:
@@ -419,44 +475,98 @@ def try_download_missing_pair(accession, sample_dir, existing_urls):
     if len(downloaded_files) == 1:
         downloaded_file = downloaded_files[0].name
 
-        # Determinar cuál falta (R1 o R2)
+        # Determinar cuál falta
         if '_1.fastq.gz' in downloaded_file:
             missing_suffix = '_2.fastq.gz'
-            existing_suffix = '_1.fastq.gz'
         elif '_2.fastq.gz' in downloaded_file:
             missing_suffix = '_1.fastq.gz'
-            existing_suffix = '_2.fastq.gz'
         else:
-            # Si no tiene sufijo, asumir que es R1
-            missing_suffix = '_2.fastq.gz'
-            existing_suffix = ''
+            missing_suffix = '_2.fastq.gz'  # Asumir que falta R2
 
-        # Intentar construir la URL del archivo faltante
+        # Construir URL para el archivo faltante
         if existing_urls and len(existing_urls) > 0:
             existing_url = existing_urls[0]
-            # Modificar la URL para obtener el otro par
             if '_1.fastq.gz' in existing_url:
                 missing_url = existing_url.replace('_1.fastq.gz', '_2.fastq.gz')
             elif '_2.fastq.gz' in existing_url:
                 missing_url = existing_url.replace('_2.fastq.gz', '_1.fastq.gz')
             else:
-                # Si la URL no tiene sufijo, intentar patrón común
-                accession_6 = accession[:6]
-                accession_last3 = accession[-3:] if len(accession) > 6 else accession
+                # URL genérica
+                missing_url = get_fallback_url(accession, missing_suffix)
+        else:
+            missing_url = get_fallback_url(accession, missing_suffix)
 
-                if missing_suffix == '_2.fastq.gz':
-                    missing_url = f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/{accession_last3}/{accession}/{accession}_2.fastq.gz"
-                else:
-                    missing_url = f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession_6}/{accession_last3}/{accession}/{accession}_1.fastq.gz"
+        missing_filename = f"{accession}{missing_suffix}"
+        missing_filepath = sample_dir / missing_filename
 
-            missing_filename = f"{accession}{missing_suffix}"
-            missing_filepath = sample_dir / missing_filename
+        print(f"   Intentando descargar {missing_filename}...")
+        if download_file_with_retry(missing_url, missing_filepath):
+            print(f"   ✅ {missing_filename} descargado")
+        else:
+            print(f"   ❌ No se pudo descargar {missing_filename}")
 
-            print(f"   Intentando descargar {missing_filename}...")
-            if download_file_with_retry(missing_url, missing_filepath):
-                print(f"   ✅ {missing_filename} descargado")
-            else:
-                print(f"   ❌ No se pudo descargar {missing_filename}")
+
+def get_fallback_url(accession, suffix):
+    """Genera una URL de fallback basada en el accession"""
+    if accession.startswith('SRR'):
+        prefix = accession[:6]
+        suffix_num = accession[-3:]
+        return f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{prefix}/{suffix_num}/{accession}/{accession}{suffix}"
+    return f"https://ftp.sra.ebi.ac.uk/vol1/fastq/{accession[:6]}/{accession[-3:]}/{accession}/{accession}{suffix}"
+
+
+def emergency_download(accession, sample_dir):
+    """Método de emergencia para descargar desde ENA usando wget directamente"""
+    print(f"🚨 Usando método de emergencia para {accession}...")
+
+    # URLs de emergencia (más directas)
+    emergency_urls = [
+        f"https://www.ebi.ac.uk/ena/portal/api/filereport?accession={accession}&result=read_run&fields=fastq_ftp&download=true",
+        f"https://www.ebi.ac.uk/ena/browser/api/xml/{accession}?download=true",
+    ]
+
+    for url in emergency_urls:
+        try:
+            print(f"   Intentando URL de emergencia: {url[:80]}...")
+            response = requests.get(url, timeout=30)
+            if response.status_code == 200:
+                # Buscar URLs de FASTQ en la respuesta
+                content = response.text
+
+                # Buscar patrones de FTP
+                ftp_patterns = [
+                    r'ftp://ftp\.sra\.ebi\.ac\.uk/vol1/fastq/[^"\s<>]*\.fastq\.gz',
+                    r'https://ftp\.sra\.ebi\.ac\.uk/vol1/fastq/[^"\s<>]*\.fastq\.gz',
+                ]
+
+                for pattern in ftp_patterns:
+                    matches = re.findall(pattern, content)
+                    for match in matches:
+                        if accession in match:
+                            # Convertir a HTTPS si es FTP
+                            if match.startswith('ftp://'):
+                                match = match.replace('ftp://', 'https://')
+
+                            # Determinar nombre de archivo
+                            if '_1.fastq.gz' in match:
+                                filename = f"{accession}_1.fastq.gz"
+                            elif '_2.fastq.gz' in match:
+                                filename = f"{accession}_2.fastq.gz"
+                            else:
+                                filename = f"{accession}.fastq.gz"
+
+                            filepath = sample_dir / filename
+
+                            print(f"   Descargando desde URL encontrada...")
+                            if download_file_with_retry(match, filepath):
+                                print(f"   ✅ Descarga de emergencia exitosa")
+                                return True
+        except Exception as e:
+            print(f"   Error en método de emergencia: {str(e)[:50]}")
+
+    print(f"❌ Todos los métodos fallaron para {accession}")
+    print(f"💡 Descarga manual desde: https://www.ebi.ac.uk/ena/browser/view/{accession}")
+    return False
 
 
 # Las funciones restantes se mantienen igual...
