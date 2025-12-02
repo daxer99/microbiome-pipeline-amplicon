@@ -134,15 +134,61 @@ fi
 echo ""
 
 # ============================================
-# 6. VERIFICAR INSTALACIÓN
+# 6. INSTALAR SRA TOOLKIT (PARA DESCARGAS DE SRA)
 # ============================================
 
-step "Verificando instalación..."
+step "Instalando SRA Toolkit para descarga de datos..."
+
+# Intentar instalación con conda en el entorno activo
+info "Instalando sra-tools desde bioconda..."
+if conda install -c bioconda sra-tools -y; then
+    info "SRA Toolkit instalado correctamente"
+else
+    warn "No se pudo instalar con bioconda, intentando alternativa..."
+
+    # Intentar con mamba si está disponible
+    if command -v mamba &> /dev/null; then
+        mamba install -c bioconda sra-tools -y || warn "Falló instalación con mamba"
+    fi
+fi
+
+# Verificar instalación
+echo ""
+step "Verificando instalación de SRA Toolkit..."
+if command -v prefetch &> /dev/null; then
+    info "prefetch disponible: $(prefetch --version 2>&1 | head -1 || echo 'instalado')"
+else
+    warn "prefetch no disponible - intentando instalación manual..."
+
+    # Intentar instalar con pip como alternativa (si hay paquete pip)
+    pip install sra-tools 2>/dev/null || true
+
+    # Verificar de nuevo
+    if command -v prefetch &> /dev/null; then
+        info "prefetch ahora disponible"
+    else
+        warn "prefetch no instalado. Las funciones de descarga no funcionarán."
+        warn "Para instalar manualmente después: conda install -c bioconda sra-tools"
+    fi
+fi
+
 echo ""
 
-# Crear script de verificación temporal
+# ============================================
+# 7. VERIFICAR INSTALACIÓN
+# ============================================
+
+step "Verificando instalación completa..."
+echo ""
+
+# Crear script de verificación temporal (INCLUYENDO SRA TOOLS)
 cat > /tmp/verify_installation.py << 'VERIFY_SCRIPT'
 import sys
+import subprocess
+import os
+
+print("Verificando componentes críticos:")
+print("=" * 60)
 
 # Lista de imports críticos que debe verificar
 critical_imports = [
@@ -162,24 +208,47 @@ critical_imports = [
     ('biom', 'import biom'),
 ]
 
-print("Verificando componentes críticos:")
-print("=" * 60)
-
-failed = []
+failed_imports = []
 for name, import_stmt in critical_imports:
     try:
         exec(import_stmt)
         print(f"✓ {name:20} OK")
     except Exception as e:
         print(f"✗ {name:20} FALLO: {str(e)[:30]}")
-        failed.append(name)
+        failed_imports.append(name)
+
+print("")
+print("Verificando herramientas de línea de comandos:")
+print("-" * 40)
+
+# Verificar herramientas de SRA
+sra_tools = ['prefetch', 'fasterq-dump', 'vdb-validate']
+missing_tools = []
+for tool in sra_tools:
+    try:
+        # Verificar si el comando existe
+        result = subprocess.run(['which', tool], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"✓ {tool:15} OK")
+        else:
+            print(f"✗ {tool:15} NO ENCONTRADO")
+            missing_tools.append(tool)
+    except Exception:
+        print(f"✗ {tool:15} ERROR AL VERIFICAR")
+        missing_tools.append(tool)
 
 print("=" * 60)
-if not failed:
+
+if not failed_imports and not missing_tools:
     print("\n✅ TODOS LOS COMPONENTES VERIFICADOS\n")
     sys.exit(0)
 else:
-    print(f"\n⚠️  {len(failed)} componente(s) fallaron: {', '.join(failed)}\n")
+    if failed_imports:
+        print(f"\n⚠️  {len(failed_imports)} import(s) fallaron: {', '.join(failed_imports)}")
+    if missing_tools:
+        print(f"⚠️  {len(missing_tools)} herramienta(s) faltan: {', '.join(missing_tools)}")
+        print("   Para instalar: conda install -c bioconda sra-tools")
+    print("")
     sys.exit(1)
 VERIFY_SCRIPT
 
@@ -209,7 +278,7 @@ rm /tmp/verify_installation.py
 echo ""
 
 # ============================================
-# 7. VERIFICAR PIPELINE CLI
+# 8. VERIFICAR PIPELINE CLI
 # ============================================
 
 step "Verificando pipeline CLI..."
@@ -231,7 +300,7 @@ fi
 echo ""
 
 # ============================================
-# 8. CREAR SCRIPTS DE AYUDA
+# 9. CREAR SCRIPTS DE AYUDA
 # ============================================
 
 step "Creando scripts de ayuda..."
@@ -255,25 +324,42 @@ echo ""
 EOF
 chmod +x activate.sh
 
-# Script de test rápido
+# Script de test rápido (actualizado para incluir SRA)
 cat > test.sh << 'EOF'
 #!/bin/bash
 eval "$(conda shell.bash hook)"
 conda activate qiime2-amplicon-2024.2
 
-echo "Probando imports críticos..."
+echo "=============================================="
+echo "  🧪 Test Rápido - Microbiome Pipeline"
+echo "=============================================="
+echo ""
+echo "1. Probando imports críticos..."
 python -c "
 from qiime2 import Artifact
 from qiime2.plugins.demux.visualizers import summarize
 from qiime2.plugins.feature_classifier.pipelines import classify_consensus_vsearch
 import pandas
 import dokdo
-print('✅ Todos los imports funcionan')
+print('   ✅ Todos los imports funcionan')
 "
 
 echo ""
-echo "Probando CLI..."
+echo "2. Probando herramientas SRA..."
+for tool in prefetch fasterq-dump vdb-validate; do
+    if command -v $tool &> /dev/null; then
+        echo "   ✅ $tool disponible"
+    else
+        echo "   ❌ $tool NO disponible"
+    fi
+done
+
+echo ""
+echo "3. Probando CLI..."
 python microbiome_cli.py --help | head -3
+echo ""
+echo "=============================================="
+echo ""
 EOF
 chmod +x test.sh
 
@@ -282,7 +368,7 @@ info "Scripts creados: activate.sh y test.sh"
 echo ""
 
 # ============================================
-# 9. RESUMEN FINAL
+# 10. RESUMEN FINAL
 # ============================================
 
 echo "=============================================="
@@ -302,6 +388,9 @@ echo ""
 echo "  3. Test rápido:"
 echo "     ./test.sh"
 echo ""
+echo "  4. Descargar datos de ejemplo:"
+echo "     python microbiome_cli.py download example/sra.csv --output-dir example/"
+echo ""
 echo "=============================================="
 echo ""
 
@@ -310,7 +399,8 @@ step "Versiones instaladas:"
 echo "  • QIIME2: $(python -c 'import qiime2; print(qiime2.__version__)' 2>/dev/null || echo 'error')"
 echo "  • Python: $(python --version 2>&1 | cut -d' ' -f2)"
 echo "  • PICRUSt2: $(picrust2_pipeline.py -v 2>&1 | head -1 || echo 'instalado')"
-echo ""
+echo "  • SRA Toolkit: $(prefetch --version 2>&1 | grep -o 'version [0-9.]*' | head -1 || echo 'instalado')"
 
+echo ""
 info "Todo listo para usar el pipeline"
 echo ""
