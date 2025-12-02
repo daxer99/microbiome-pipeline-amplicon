@@ -44,7 +44,3 @@ dependencies:
   - curl
   - git
   - pip
-
-  # Pip packages
-  - pip:
-    - dokdo>=0.2.0

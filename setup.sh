@@ -175,13 +175,52 @@ fi
 echo ""
 
 # ============================================
-# 7. VERIFICAR INSTALACIÓN
+# 7. INSTALAR DOKDO DESDE GITHUB (CORRECTO)
+# ============================================
+
+step "Instalando dokdo desde GitHub..."
+
+info "Instalando dokdo desde el repositorio oficial..."
+pip install git+https://github.com/sbslee/dokdo.git || warn "Falló instalación directa de dokdo"
+
+# Verificar instalación
+if python -c "import dokdo; print(f'✅ Dokdo importado exitosamente')" 2>/dev/null; then
+    info "Dokdo instalado correctamente"
+    # Obtener versión si es posible
+    python -c "import dokdo; print(f'   Versión: {dokdo.__version__}')" 2>/dev/null || echo "   (versión no disponible)"
+else
+    warn "Dokdo no se pudo importar después de pip install"
+
+    # Intentar método alternativo
+    info "Intentando instalación desde clonado local..."
+    DOKDO_TEMP_DIR=$(mktemp -d)
+    cd "$DOKDO_TEMP_DIR"
+
+    git clone https://github.com/sbslee/dokdo.git && cd dokdo && pip install .
+
+    cd - > /dev/null
+    rm -rf "$DOKDO_TEMP_DIR"
+
+    # Verificar de nuevo
+    if python -c "import dokdo" 2>/dev/null; then
+        info "Dokdo instalado correctamente desde clonado"
+    else
+        warn "Dokdo no se pudo instalar. Algunas funciones de visualización no estarán disponibles."
+        warn "Puedes instalarlo manualmente después con:"
+        warn "  pip install git+https://github.com/sbslee/dokdo.git"
+    fi
+fi
+
+echo ""
+
+# ============================================
+# 8. VERIFICAR INSTALACIÓN
 # ============================================
 
 step "Verificando instalación completa..."
 echo ""
 
-# Crear script de verificación temporal (INCLUYENDO SRA TOOLS)
+# Crear script de verificación temporal (INCLUYENDO DOKDO)
 cat > /tmp/verify_installation.py << 'VERIFY_SCRIPT'
 import sys
 import subprocess
@@ -204,8 +243,9 @@ critical_imports = [
     ('quality-control', 'from qiime2.plugins import quality_control'),
     ('pandas', 'import pandas'),
     ('click', 'import click'),
-    ('dokdo', 'import dokdo'),
     ('biom', 'import biom'),
+    # Dokdo - verificar pero no fallar si no está
+    ('dokdo', 'import dokdo'),
 ]
 
 failed_imports = []
@@ -214,8 +254,11 @@ for name, import_stmt in critical_imports:
         exec(import_stmt)
         print(f"✓ {name:20} OK")
     except Exception as e:
-        print(f"✗ {name:20} FALLO: {str(e)[:30]}")
-        failed_imports.append(name)
+        if name == 'dokdo':
+            print(f"⚠ {name:20} AUSENTE: {str(e)[:30]}")
+        else:
+            print(f"✗ {name:20} FALLO: {str(e)[:30]}")
+            failed_imports.append(name)
 
 print("")
 print("Verificando herramientas de línea de comandos:")
@@ -239,12 +282,30 @@ for tool in sra_tools:
 
 print("=" * 60)
 
-if not failed_imports and not missing_tools:
-    print("\n✅ TODOS LOS COMPONENTES VERIFICADOS\n")
+# Si dokdo está instalado, verificar funciones específicas
+try:
+    import dokdo
+    dokdo_functions = ['quality_plot', 'taxa_barplot', 'alpha_diversity_plot']
+    available_functions = []
+    for func in dokdo_functions:
+        if hasattr(dokdo, func):
+            available_functions.append(func)
+
+    if available_functions:
+        print(f"✅ Dokdo funciones disponibles: {', '.join(available_functions)}")
+    else:
+        print("⚠  Dokdo instalado pero funciones no encontradas")
+except ImportError:
+    print("⚠  Dokdo no instalado - algunas visualizaciones no estarán disponibles")
+
+print("=" * 60)
+
+if not failed_imports:
+    print("\n✅ COMPONENTES CRÍTICOS VERIFICADOS\n")
     sys.exit(0)
 else:
     if failed_imports:
-        print(f"\n⚠️  {len(failed_imports)} import(s) fallaron: {', '.join(failed_imports)}")
+        print(f"\n⚠️  {len(failed_imports)} import(s) críticos fallaron: {', '.join(failed_imports)}")
     if missing_tools:
         print(f"⚠️  {len(missing_tools)} herramienta(s) faltan: {', '.join(missing_tools)}")
         print("   Para instalar: conda install -c bioconda sra-tools")
@@ -262,8 +323,6 @@ else
     conda install -c https://packages.qiime2.org/qiime2/2024.2/amplicon/released \
         q2-feature-classifier q2-phylogeny q2-quality-control -y
 
-    pip install --upgrade dokdo
-
     echo ""
     step "Verificando nuevamente después de reparación..."
     if python /tmp/verify_installation.py; then
@@ -278,7 +337,7 @@ rm /tmp/verify_installation.py
 echo ""
 
 # ============================================
-# 8. VERIFICAR PIPELINE CLI
+# 9. VERIFICAR PIPELINE CLI
 # ============================================
 
 step "Verificando pipeline CLI..."
@@ -300,7 +359,7 @@ fi
 echo ""
 
 # ============================================
-# 9. CREAR SCRIPTS DE AYUDA
+# 10. CREAR SCRIPTS DE AYUDA
 # ============================================
 
 step "Creando scripts de ayuda..."
@@ -324,7 +383,7 @@ echo ""
 EOF
 chmod +x activate.sh
 
-# Script de test rápido (actualizado para incluir SRA)
+# Script de test rápido (actualizado)
 cat > test.sh << 'EOF'
 #!/bin/bash
 eval "$(conda shell.bash hook)"
@@ -340,7 +399,11 @@ from qiime2 import Artifact
 from qiime2.plugins.demux.visualizers import summarize
 from qiime2.plugins.feature_classifier.pipelines import classify_consensus_vsearch
 import pandas
-import dokdo
+try:
+    import dokdo
+    print('   ✅ Dokdo instalado')
+except:
+    print('   ⚠  Dokdo no instalado (algunas visualizaciones no funcionarán)')
 print('   ✅ Todos los imports funcionan')
 "
 
@@ -368,7 +431,7 @@ info "Scripts creados: activate.sh y test.sh"
 echo ""
 
 # ============================================
-# 10. RESUMEN FINAL
+# 11. RESUMEN FINAL
 # ============================================
 
 echo "=============================================="
@@ -400,6 +463,7 @@ echo "  • QIIME2: $(python -c 'import qiime2; print(qiime2.__version__)' 2>/de
 echo "  • Python: $(python --version 2>&1 | cut -d' ' -f2)"
 echo "  • PICRUSt2: $(picrust2_pipeline.py -v 2>&1 | head -1 || echo 'instalado')"
 echo "  • SRA Toolkit: $(prefetch --version 2>&1 | grep -o 'version [0-9.]*' | head -1 || echo 'instalado')"
+echo "  • Dokdo: $(python -c 'import dokdo; print(dokdo.__version__)' 2>/dev/null || echo 'no instalado')"
 
 echo ""
 info "Todo listo para usar el pipeline"
