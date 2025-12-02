@@ -5,36 +5,56 @@ channels:
   - https://packages.qiime2.org/qiime2/2024.2/amplicon/released
   - defaults
 dependencies:
-  # QIIME2 Essentials
   - qiime2=2024.2
   - q2cli=2024.2
   - q2-demux=2024.2
   - q2-feature-table=2024.2
   - q2-taxa=2024.2
   - q2-deblur=2024.2
+  - q2-diversity=2024.2
+  - q2-phylogeny=2024.2
   - q2-quality-control=2024.2
   - q2-quality-filter=2024.2
-  - q2-diversity=2024.2
+  - q2-vsearch=2024.2
+  - q2-feature-classifier=2024.2
+  - q2-alignment=2024.2
+  - q2-emperor=2024.2
 
   # PICRUSt2
   - picrust2=2.5.2
+  - biom-format=2.1.14
+  - gappa=0.8.0
+  - epa-ng=0.3.8
 
-  # Bioinformatics tools
+  # Herramientas bioinformáticas
   - vsearch=2.22.1
   - cutadapt=4.6
   - fastqc
-  - biom-format=2.1.14
+  - mafft=7.525
+  - fasttree=2.2.0
+  - deblur=1.1.1
+  - samtools=1.18
+  - hmmer=3.1b2
+  - sepp=4.3.10
 
-  # Python
+  # Python packages
   - python=3.8
-  - pandas
-  - numpy
-  - matplotlib
-  - seaborn
-  - click
-  - biopython
-  - scipy
+  - pandas=1.5.3
+  - numpy=1.24.4
+  - matplotlib=3.6.0
+  - seaborn=0.13.2
+  - scipy=1.10.0
+  - scikit-learn=0.24.1
+  - scikit-bio=0.5.8
+  - biopython=1.83
+  - click=8.1.7
 
-  # Utilities
+  # Utilidades
   - wget
   - curl
+  - pigz=2.8
+  - parallel
+
+  # R (opcional pero útil)
+  - r-base=4.2.2
+  - r-vegan=2.6_6.1
