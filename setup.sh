@@ -155,7 +155,7 @@ critical_imports = [
     ('taxa', 'from qiime2.plugins.taxa.visualizers import barplot'),
     ('diversity', 'from qiime2.plugins.diversity.pipelines import alpha, beta'),
     ('phylogeny', 'from qiime2.plugins.phylogeny.pipelines import align_to_tree_mafft_fasttree'),
-    ('quality-control', 'from qiime2.plugins.quality_control.visualizers import summarize as qc_summarize'),
+    ('quality-control', 'from qiime2.plugins import quality_control'),
     ('pandas', 'import pandas'),
     ('click', 'import click'),
     ('dokdo', 'import dokdo'),
