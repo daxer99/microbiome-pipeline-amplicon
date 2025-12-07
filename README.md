@@ -85,41 +85,41 @@ https://www.ezbiocloud.net/resources/16s_download
 
 ```python
 # 1. Download sequences from SRA
-    python microbiome_cli.py download example/sra.csv --output-dir example/samples
+python microbiome_cli.py download example/sra.csv --output-dir example/samples
 
 # 2. Create manifest file
-    python microbiome_cli.py create-manifest --input-dir example/samples --output-file example/manifest.csv
+python microbiome_cli.py create-manifest --input-dir example/samples --output-file example/manifest.csv
 
 # 3. Import to QIIME2
-    python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example/demux.qza
+python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example/demux.qza
 
 # 4. Quality control
-     python microbiome_cli.py quality-control example/demux.qza --output-dir example/qc
+python microbiome_cli.py quality-control example/demux.qza --output-dir example/qc
 
 # 5. Denoising with Deblur
-    python microbiome_cli.py run-deblur example/demux.qza --left-trim-len 10 --trim-length 125 --jobs-to-start 8 --output-dir example/deblur_results
+python microbiome_cli.py run-deblur example/demux.qza --left-trim-len 10 --trim-length 125 --jobs-to-start 8 --output-dir example/deblur_results
 
 # 5.1. Alternative
-    python microbiome_cli.py run-deblur example/qc/flitered_seqs.qza --left-trim-len 0 --trim-length 250 --jobs-to-start 8 --output-dir example/deblur_results
+python microbiome_cli.py run-deblur example/qc/flitered_seqs.qza --left-trim-len 0 --trim-length 250 --jobs-to-start 8 --output-dir example/deblur_results
 
 # 6. Phylogenetic tree
-    python microbiome_cli.py build-phylogeny example/deblur_results/rep-seqs.qza --output-dir example/phylogeny
+python microbiome_cli.py build-phylogeny example/deblur_results/rep-seqs.qza --output-dir example/phylogeny
 
 # 7. Taxonomic assignment
-    python microbiome_cli.py assign-taxonomy example/deblur_results/table.qza example/deblur_results/rep-seqs.qza ref_db/ref-seqs.qza ref_db/ref-taxa.qza example/metadata.tsv --cpus 8 --output-dir example/taxa
+python microbiome_cli.py assign-taxonomy example/deblur_results/table.qza example/deblur_results/rep-seqs.qza ref_db/ref-seqs.qza ref_db/ref-taxa.qza example/metadata.tsv --cpus 8 --output-dir example/taxa
 
 # 8.1 Alpha Diversity analysis
-    python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,gini_index,shannon --output-dir example/alpha
+python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,gini_index,shannon --output-dir example/alpha
 
-    python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,faith_pd,shannon --rooted-tree example/phylogeny/rooted_tree.qza --output-dir example/alpha
+python microbiome_cli.py alpha-diversity example/deblur_results/table.qza --metrics ace,faith_pd,shannon --rooted-tree example/phylogeny/rooted_tree.qza --output-dir example/alpha
 
 # 8.2 Beta Diversity analysis
-    python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis --metadata example/metadata.tsv --hue subject --output-dir example/beta
+python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis --metadata example/metadata.tsv --hue subject --output-dir example/beta
 
-    python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis  --phylo-metrics unweighted_unifrac --rooted-tree example/phylogeny/rooted_tree.qza --metadata example/metadata.tsv --hue subject --output-dir example/beta
+python microbiome_cli.py beta-diversity example/deblur_results/table.qza --metrics braycurtis  --phylo-metrics unweighted_unifrac --rooted-tree example/phylogeny/rooted_tree.qza --metadata example/metadata.tsv --hue subject --output-dir example/beta
 
 # 9. Metabolic pathway prediction
-    python microbiome_cli.py predict-metabolic-pathways example/deblur_results/table.qza example/deblur_results/rep-seqs.qza --threads 8 --output-dir example/picrust2
+python microbiome_cli.py predict-metabolic-pathways example/deblur_results/table.qza example/deblur_results/rep-seqs.qza --threads 8 --output-dir example/picrust2
 ```
 
 
