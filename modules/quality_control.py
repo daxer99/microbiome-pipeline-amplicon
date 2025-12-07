@@ -1,11 +1,16 @@
 """
 Módulo simplificado para control de calidad - Solo gráficos de calidad
 """
+import matplotlib
+
+matplotlib.use('Agg')  # Usar backend no interactivo
 import matplotlib.pyplot as plt
 from pathlib import Path
 from qiime2 import Artifact
 from qiime2.plugins.demux.visualizers import summarize
 import dokdo
+import tempfile
+import os
 
 
 class QualityControl:
@@ -67,6 +72,27 @@ class QualityControl:
 
         return viz_path
 
+    def _detect_strands(self):
+        """Detecta si es single-end o paired-end"""
+        if self.quality_visualization is None:
+            self.create_quality_visualization()
+
+        viz = self.quality_visualization.visualization
+
+        # Detectar strands disponibles
+        with tempfile.TemporaryDirectory() as tmpdir:
+            viz.export_data(tmpdir)
+
+            forward_exists = os.path.exists(os.path.join(tmpdir, 'forward-seven-number-summaries.tsv'))
+            reverse_exists = os.path.exists(os.path.join(tmpdir, 'reverse-seven-number-summaries.tsv'))
+
+            if forward_exists and reverse_exists:
+                return 'paired'
+            elif forward_exists:
+                return 'single'
+            else:
+                return None
+
     def plot_quality_profile(self, output_file="quality_profile.png"):
         """Genera gráficos de perfil de calidad usando dokdo"""
         if self.quality_visualization is None:
@@ -74,38 +100,52 @@ class QualityControl:
 
         print(f"📊 Generando gráfico de calidad...")
 
+        # Detectar tipo de datos
+        data_type = self._detect_strands()
+
+        if not data_type:
+            print("⚠️  No se pudieron detectar datos de calidad")
+            return None
+
         viz = self.quality_visualization.visualization
 
-        # Detectar si es paired-end o single-end
-        # Intentar verificar qué strands están disponibles
-        import tempfile
-        import os
+        # Configurar figura según el tipo de datos
+        if data_type == 'paired':
+            # Paired-end: crear figura con 2 subplots
+            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Exportar la visualización temporalmente
-            viz.export_data(tmpdir)
-
-            # Verificar qué archivos existen
-            has_forward = os.path.exists(os.path.join(tmpdir, 'forward-seven-number-summaries.tsv'))
-            has_reverse = os.path.exists(os.path.join(tmpdir, 'reverse-seven-number-summaries.tsv'))
-
-        if has_forward and has_reverse:
-            # Paired-end
-            fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(10, 5))
+            # Crear gráfico forward
+            ax1 = axes[0]
             dokdo.read_quality_plot(viz, strand='forward', ax=ax1)
-            dokdo.read_quality_plot(viz, strand='reverse', ax=ax2)
-            ax1.set_title('Forward read')
-            ax2.set_title('Reverse read')
-            ax2.set_ylabel('')
-            ax2.set_yticklabels([])
-            ax2.autoscale(enable=True, axis='x', tight=False)
-        else:
-            # Single-end
-            fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-            dokdo.read_quality_plot(viz, strand='forward', ax=ax)
-            ax.set_title('Forward read')
+            ax1.set_title('Forward Read - Quality Profile', fontsize=12, fontweight='bold')
+            ax1.set_xlabel('Position in Read', fontsize=10)
+            ax1.set_ylabel('Quality Score', fontsize=10)
+            ax1.grid(True, alpha=0.3)
 
-        plt.tight_layout()
+            # Crear gráfico reverse
+            ax2 = axes[1]
+            dokdo.read_quality_plot(viz, strand='reverse', ax=ax2)
+            ax2.set_title('Reverse Read - Quality Profile', fontsize=12, fontweight='bold')
+            ax2.set_xlabel('Position in Read', fontsize=10)
+            ax2.set_ylabel('')
+            ax2.grid(True, alpha=0.3)
+
+            # Ajustar layout
+            plt.tight_layout()
+
+        else:  # single-end
+            # Single-end: crear figura con 1 subplot
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+            dokdo.read_quality_plot(viz, strand='forward', ax=ax)
+            ax.set_title('Quality Profile', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Position in Read', fontsize=11)
+            ax.set_ylabel('Quality Score', fontsize=11)
+            ax.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+
+        # Guardar figura
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close(fig)
         print(f"✅ Gráfico de calidad guardado: {output_file}")
