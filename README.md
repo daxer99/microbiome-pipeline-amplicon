@@ -91,7 +91,7 @@ python microbiome_cli.py download example/sra.csv --output-dir example/samples
 python microbiome_cli.py create-manifest --input-dir example/samples --output-file example/manifest.csv
 
 # 3. Import to QIIME2
-python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example/demux.qza
+python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example
 
 # 4. Quality control
 python microbiome_cli.py quality-control example/demux.qza --output-dir example/qc
