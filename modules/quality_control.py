@@ -1,6 +1,10 @@
 """
 Módulo simplificado para control de calidad - Solo gráficos de calidad
 """
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning)  # Silenciar warnings específicos
+
 import matplotlib
 
 matplotlib.use('Agg')  # Usar backend no interactivo
@@ -72,27 +76,6 @@ class QualityControl:
 
         return viz_path
 
-    def _detect_strands(self):
-        """Detecta si es single-end o paired-end"""
-        if self.quality_visualization is None:
-            self.create_quality_visualization()
-
-        viz = self.quality_visualization.visualization
-
-        # Detectar strands disponibles
-        with tempfile.TemporaryDirectory() as tmpdir:
-            viz.export_data(tmpdir)
-
-            forward_exists = os.path.exists(os.path.join(tmpdir, 'forward-seven-number-summaries.tsv'))
-            reverse_exists = os.path.exists(os.path.join(tmpdir, 'reverse-seven-number-summaries.tsv'))
-
-            if forward_exists and reverse_exists:
-                return 'paired'
-            elif forward_exists:
-                return 'single'
-            else:
-                return None
-
     def plot_quality_profile(self, output_file="quality_profile.png"):
         """Genera gráficos de perfil de calidad usando dokdo"""
         if self.quality_visualization is None:
@@ -100,52 +83,60 @@ class QualityControl:
 
         print(f"📊 Generando gráfico de calidad...")
 
-        # Detectar tipo de datos
-        data_type = self._detect_strands()
-
-        if not data_type:
-            print("⚠️  No se pudieron detectar datos de calidad")
-            return None
-
         viz = self.quality_visualization.visualization
 
-        # Configurar figura según el tipo de datos
-        if data_type == 'paired':
-            # Paired-end: crear figura con 2 subplots
+        # Verificar si es paired-end
+        is_paired = False
+        try:
+            # Intentar crear un gráfico con ambos strands
             fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-            # Crear gráfico forward
-            ax1 = axes[0]
-            dokdo.read_quality_plot(viz, strand='forward', ax=ax1)
-            ax1.set_title('Forward Read - Quality Profile', fontsize=12, fontweight='bold')
-            ax1.set_xlabel('Position in Read', fontsize=10)
-            ax1.set_ylabel('Quality Score', fontsize=10)
-            ax1.grid(True, alpha=0.3)
+            # Configurar warnings temporalmente
+            import warnings
+            from matplotlib.cbook import mplDeprecation
+            warnings.filterwarnings("ignore", category=UserWarning)
+            warnings.filterwarnings("ignore", category=mplDeprecation)
 
-            # Crear gráfico reverse
-            ax2 = axes[1]
-            dokdo.read_quality_plot(viz, strand='reverse', ax=ax2)
-            ax2.set_title('Reverse Read - Quality Profile', fontsize=12, fontweight='bold')
-            ax2.set_xlabel('Position in Read', fontsize=10)
-            ax2.set_ylabel('')
-            ax2.grid(True, alpha=0.3)
+            # Intentar forward
+            try:
+                dokdo.read_quality_plot(viz, strand='forward', ax=axes[0])
+                axes[0].set_title('Forward Read', fontsize=12, fontweight='bold')
+                axes[0].set_xlabel('Position in Read', fontsize=10)
+                axes[0].set_ylabel('Quality Score', fontsize=10)
+            except Exception:
+                axes[0].set_visible(False)
 
-            # Ajustar layout
-            plt.tight_layout()
+            # Intentar reverse
+            try:
+                dokdo.read_quality_plot(viz, strand='reverse', ax=axes[1])
+                axes[1].set_title('Reverse Read', fontsize=12, fontweight='bold')
+                axes[1].set_xlabel('Position in Read', fontsize=10)
+                axes[1].set_ylabel('')
+                is_paired = True
+            except Exception:
+                axes[1].set_visible(False)
+                is_paired = False
 
-        else:  # single-end
-            # Single-end: crear figura con 1 subplot
+            # Si solo hay un gráfico visible, ajustar
+            if not axes[1].get_visible() and axes[0].get_visible():
+                # Single-end: usar figura más pequeña
+                plt.close(fig)
+                fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+                dokdo.read_quality_plot(viz, strand='forward', ax=ax)
+                ax.set_title('Quality Profile', fontsize=14, fontweight='bold')
+                ax.set_xlabel('Position in Read', fontsize=11)
+                ax.set_ylabel('Quality Score', fontsize=11)
+
+        except Exception as e:
+            print(f"⚠️  Advertencia: {e}")
+            # Fallback: gráfico simple
             fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-
             dokdo.read_quality_plot(viz, strand='forward', ax=ax)
             ax.set_title('Quality Profile', fontsize=14, fontweight='bold')
             ax.set_xlabel('Position in Read', fontsize=11)
             ax.set_ylabel('Quality Score', fontsize=11)
-            ax.grid(True, alpha=0.3)
 
-            plt.tight_layout()
-
-        # Guardar figura
+        plt.tight_layout()
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close(fig)
         print(f"✅ Gráfico de calidad guardado: {output_file}")
