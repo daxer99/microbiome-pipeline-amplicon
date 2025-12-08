@@ -10,15 +10,15 @@ echo "======================================================"
 echo ""
 
 # -------------------------------------------------------
-# 1. DESHABILITAR MICROMAMBA
+# 1. ELIMINAR MICROMAMBA DEL PATH
 # -------------------------------------------------------
-echo ">> Eliminando micromamba del PATH temporalmente..."
+echo ">> Eliminando micromamba del PATH..."
 export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "micromamba" | paste -sd ":" -)
 
 # -------------------------------------------------------
-# 2. DETECTAR COMANDO (mamba > conda)
+# 2. DETECTAR MAMBA O CONDA
 # -------------------------------------------------------
-if command -v mamba &> /dev/null; then
+if command -v mamba &>/dev/null; then
     CMD=mamba
     echo ">> Usando mamba"
 else
@@ -27,9 +27,8 @@ else
 fi
 
 # -------------------------------------------------------
-# 3. FIX DE QIIME2 (channel_priority flexible)
+# 3. FIX NECESARIO PARA QIIME2
 # -------------------------------------------------------
-echo ""
 echo ">> Ajustando channel_priority = flexible"
 conda config --set channel_priority flexible
 
@@ -37,50 +36,52 @@ conda config --set channel_priority flexible
 # 4. ELIMINAR ENTORNO PREVIO
 # -------------------------------------------------------
 echo ""
-echo ">> Eliminando entorno previo si existe..."
+echo ">> Eliminando entorno anterior si existe..."
 conda remove -n "$ENV_NAME" --all -y || true
 
 # -------------------------------------------------------
-# 5. CREAR ENTORNO DESDE EL YAML OFICIAL DE QIIME2
+# 5. DESCARGAR YAML (verificar)
 # -------------------------------------------------------
-echo ""
-echo ">> Creando entorno con QIIME2 2024.2..."
-$CMD env create \
-    --name "$ENV_NAME" \
-    --file "$YAML_URL" \
-    --solver=libmamba
+echo ">> Descargando YAML oficial..."
+curl -sSL "$YAML_URL" -o qiime2.yml
+
+if ! grep -q "dependencies" qiime2.yml; then
+    echo "ERROR: YAML inválido o no descargado correctamente."
+    cat qiime2.yml
+    exit 1
+fi
 
 # -------------------------------------------------------
-# 6. ACTIVAR ENTORNO
+# 6. CREAR ENTORNO SIN --solver
 # -------------------------------------------------------
-echo ""
+echo ">> Creando entorno QIIME2 (sin --solver)..."
+
+$CMD env create -n "$ENV_NAME" -f qiime2.yml || {
+    echo "Falló con mamba — reintentando con conda..."
+    conda env create -n "$ENV_NAME" -f qiime2.yml
+}
+
+# -------------------------------------------------------
+# 7. ACTIVAR ENTORNO
+# -------------------------------------------------------
 echo ">> Activando entorno..."
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$ENV_NAME"
 
 # -------------------------------------------------------
-# 7. INSTALAR DEBLUR (pip) + DEPENDENCIAS
+# 8. INSTALAR DEBLUR + DEPENDENCIAS
 # -------------------------------------------------------
-echo ""
-echo ">> Instalando Deblur + dependencias..."
+echo ">> Instalando Deblur..."
 pip install --upgrade pip
-
-# sortmerna 2 no existe en bioconda → parche compatible
 pip install sortmerna==2.0.0a
-
-# Deblur estable
 pip install deblur==1.1.1
 
-# FIX: crear symlink requerido por Deblur
-mkdir -p $CONDA_PREFIX/bin
-if [ ! -f $CONDA_PREFIX/bin/sortmerna ]; then
-    ln -s $(which sortmerna) $CONDA_PREFIX/bin/sortmerna
-fi
+# symlink requerido por Deblur
+ln -sf "$(which sortmerna)" "$CONDA_PREFIX/bin/sortmerna"
 
 # -------------------------------------------------------
-# 8. INSTALAR PLUGINS EXTRAS COMPATIBLES
+# 9. PLUGINS EXTRA
 # -------------------------------------------------------
-echo ""
 echo ">> Instalando plugins extra..."
 pip install \
     q2-sample-classifier \
@@ -90,20 +91,17 @@ pip install \
     q2-longitudinal
 
 # -------------------------------------------------------
-# 9. TESTS DE INSTALACIÓN
+# 10. TESTS
 # -------------------------------------------------------
 echo ""
-echo ">> Verificando QIIME2..."
-qiime --help >/dev/null && echo "   ✓ qiime OK"
+echo ">> Verificando instalación..."
 
-echo ">> Verificando Deblur..."
-python -c "import deblur" && echo "   ✓ deblur importable"
-
-echo ">> Verificando método: denoise-16S..."
-qiime deblur denoise-16S --help >/dev/null && echo "   ✓ qiime deblur OK"
+qiime --help >/dev/null && echo "✓ qiime OK"
+python -c "import deblur" && echo "✓ deblur OK"
+qiime deblur denoise-16S --help >/dev/null && echo "✓ qiime deblur OK"
 
 echo ""
 echo "======================================================"
-echo "  QIIME2 2024.2 INSTALADO CON DEBLUR + PLUGINS 🎉"
+echo "  QIIME2 2024.2 + Deblur + Plugins INSTALADO 🎉"
 echo "  Para activarlo: conda activate $ENV_NAME"
 echo "======================================================"
