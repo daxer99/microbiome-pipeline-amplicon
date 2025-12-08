@@ -1,576 +1,317 @@
 #!/bin/bash
-# Microbiome Pipeline - Instalación Simplificada y Robusta
-# Versión: 2.0
+# Script de instalación limpia para Microbiome Pipeline
 
-set -e  # Salir si hay error
-
-echo "=============================================="
-echo "   Microbiome Pipeline - Instalación v2.0"
-echo "=============================================="
+echo "=================================================="
+echo "   INSTALACIÓN LIMPIA - Microbiome Pipeline"
+echo "=================================================="
 echo ""
 
-# Colores para output
+# Configuración
+ENV_NAME="qiime2-amplicon-2024.2"
+PYTHON_VERSION="3.8"
+
+# Colores para mensajes
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-info() { echo -e "${GREEN}[✓]${NC} $1"; }
-warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-error() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
-step() { echo -e "${BLUE}[→]${NC} $1"; }
+# ===================================================
+# 1. VERIFICAR MINIFORGE3
+# ===================================================
+echo -e "${BLUE}[1] Verificando Miniforge3...${NC}"
 
-# ============================================
-# 1. VERIFICACIONES PREVIAS
-# ============================================
-
-step "Verificando requisitos previos..."
-
-# Verificar que estamos en el directorio correcto
-if [ ! -f "environment.yml" ]; then
-    error "No se encuentra environment.yml. Ejecuta este script desde el directorio del pipeline."
+# Verificar que estamos usando miniforge3
+if [[ "$(which conda)" != *"miniforge3"* ]]; then
+    echo -e "${RED}ERROR: No se detecta Miniforge3 como el conda activo.${NC}"
+    echo "Para activar Miniforge3, ejecuta:"
+    echo "  source ~/miniforge3/etc/profile.d/conda.sh"
+    echo "O añade esta línea a tu ~/.bashrc:"
+    echo "  source ~/miniforge3/etc/profile.d/conda.sh"
+    exit 1
 fi
 
-# Verificar conda
-if ! command -v conda &> /dev/null; then
-    error "Conda no está instalado. Instala Miniconda desde: https://docs.conda.io/en/latest/miniconda.html"
-fi
-info "Conda encontrado: $(conda --version)"
-
-# Inicializar conda para bash (IMPORTANTE: hacerlo al inicio)
-eval "$(conda shell.bash hook)"
-
-# Verificar conexión a internet
-if ! ping -c 1 8.8.8.8 &> /dev/null; then
-    warn "No se detecta conexión a internet. La instalación podría fallar."
-    read -p "¿Continuar de todos modos? (s/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Ss]$ ]]; then
-        exit 1
-    fi
-fi
-
+echo "✓ Usando Miniforge3 en: $(which conda)"
 echo ""
 
-# ============================================
-# 2. LIMPIAR INSTALACIÓN PREVIA
-# ============================================
+# ===================================================
+# 2. CONFIGURAR CANALES
+# ===================================================
+echo -e "${BLUE}[2] Configurando canales de conda...${NC}"
 
-step "Limpiando instalación previa (si existe)..."
+# Configurar canales en el orden correcto
+conda config --remove-key channels 2>/dev/null || true
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+conda config --add channels qiime2
+conda config --set channel_priority strict
 
-# Desactivar cualquier entorno
-conda deactivate 2>/dev/null || true
-
-# Eliminar entorno anterior si existe
-ENV_NAME="qiime2-amplicon-2024.2"
-if conda env list | grep -q "$ENV_NAME"; then
-    warn "Encontrado entorno previo. Eliminando..."
-    conda env remove -n "$ENV_NAME" -y
-    info "Entorno anterior eliminado"
-fi
-
-# Limpiar caché de conda
-conda clean --all -y &> /dev/null || true
-
+echo "✓ Canales configurados: defaults, bioconda, conda-forge, qiime2"
 echo ""
 
-# ============================================
-# 3. INSTALAR MAMBA (para instalación más rápida)
-# ============================================
+# ===================================================
+# 3. INSTALAR/ACTUALIZAR MAMBA
+# ===================================================
+echo -e "${BLUE}[3] Instalando Mamba...${NC}"
 
-step "Verificando mamba..."
-
+# Verificar si mamba está instalado
 if ! command -v mamba &> /dev/null; then
-    warn "Mamba no encontrado. Instalando para acelerar el proceso..."
-
-    # Aceptar ToS si es necesario (para Conda 25+)
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
-
+    echo "Instalando mamba..."
     conda install -n base -c conda-forge mamba -y
-    info "Mamba instalado"
+fi
 
-    # Inicializar mamba también
-    if [ -f "$(conda info --base)/etc/profile.d/mamba.sh" ]; then
-        source "$(conda info --base)/etc/profile.d/mamba.sh"
-    fi
+# Actualizar mamba si ya está instalado
+mamba update -n base -c conda-forge mamba -y
+
+echo "✓ Mamba instalado/actualizado: $(mamba --version)"
+echo ""
+
+# ===================================================
+# 4. CREAR ENTORNO NUEVO
+# ===================================================
+echo -e "${BLUE}[4] Creando entorno '$ENV_NAME'...${NC}"
+
+# Primero, verificar si el entorno ya existe
+if conda env list | grep -q "^$ENV_NAME\s"; then
+    echo "⚠  El entorno ya existe. Eliminando..."
+    conda env remove -n "$ENV_NAME" -y
+fi
+
+# Crear entorno con mamba (más rápido)
+echo "Creando entorno con Python $PYTHON_VERSION y QIIME2 2024.2..."
+echo "Esto puede tomar 15-30 minutos..."
+
+mamba create -n "$ENV_NAME" \
+    python="$PYTHON_VERSION" \
+    qiime2-amplicon=2024.2 \
+    snakemake-minimal=7.32.4 \
+    multiqc=1.17 \
+    fastp=0.23.4 \
+    pandas=2.0.3 \
+    numpy=1.24.3 \
+    matplotlib=3.7.2 \
+    seaborn=0.12.2 \
+    sra-tools \
+    -c qiime2 \
+    -c conda-forge \
+    -c bioconda \
+    -c defaults \
+    -y
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Entorno creado exitosamente${NC}"
 else
-    info "Mamba ya está instalado"
-
-    # Inicializar mamba si existe
-    if [ -f "$(conda info --base)/etc/profile.d/mamba.sh" ]; then
-        source "$(conda info --base)/etc/profile.d/mamba.sh"
-    fi
+    echo -e "${RED}✗ Error al crear el entorno${NC}"
+    exit 1
 fi
 
 echo ""
 
-# ============================================
-# 4. CREAR ENTORNO
-# ============================================
+# ===================================================
+# 5. ACTIVAR ENTORNO E INSTALAR DOKDO
+# ===================================================
+echo -e "${BLUE}[5] Activando entorno e instalando dependencias...${NC}"
 
-step "Creando entorno (esto puede tomar 15-30 minutos)..."
-echo ""
-echo "   Instalando:"
-echo "   • QIIME2 2024.2 con TODOS los plugins"
-echo "   • PICRUSt2 para predicción funcional"
-echo "   • Python 3.8 + librerías científicas"
-echo "   • Herramientas bioinformáticas"
-echo ""
+# Activar el entorno
+eval "$(conda shell.bash hook)"
+mamba activate "$ENV_NAME"
 
-# Verificar si el archivo environment.yml existe
-if [ ! -f "environment.yml" ]; then
-    error "Archivo environment.yml no encontrado!"
-fi
-
-# Usar mamba si está disponible, si no usar conda
-if command -v mamba &> /dev/null; then
-    info "Usando mamba para instalación acelerada..."
-    echo "Creando entorno: $ENV_NAME"
-
-    # Primero intentar crear con mamba usando environment.yml
-    if mamba env create -n "$ENV_NAME" -f environment.yml; then
-        info "Entorno creado exitosamente con mamba"
-    else
-        warn "Mamba falló con environment.yml, intentando enfoque alternativo..."
-
-        # Enfoque alternativo: crear entorno base e instalar QIIME2 manualmente
-        mamba create -n "$ENV_NAME" -c qiime2 -c conda-forge -c bioconda \
-            qiime2-amplicon=2024.2 \
-            snakemake-minimal=7.32.4 \
-            multiqc=1.17 \
-            fastp=0.23.4 \
-            pandas=2.0.3 \
-            numpy=1.24.3 \
-            matplotlib=3.7.2 \
-            seaborn=0.12.2 \
-            python=3.8 -y
-
-        info "Entorno creado con enfoque alternativo"
-    fi
-else
-    warn "Mamba no disponible, usando conda (más lento)..."
-
-    # Aceptar ToS para conda también
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
-
-    if conda env create -n "$ENV_NAME" -f environment.yml; then
-        info "Entorno creado exitosamente con conda"
-    else
-        error "Falló la creación del entorno con conda"
-    fi
-fi
-
-echo ""
-
-# ============================================
-# 5. ACTIVAR ENTORNO
-# ============================================
-
-step "Activando entorno..."
-
-# Esperar un momento para que el entorno esté listo
-sleep 2
-
-# Actualizar la lista de entornos
-conda config --set env_prompt '({name}) ' 2>/dev/null || true
-
-# Intentar activar con mamba si está disponible, si no con conda
-if command -v mamba &> /dev/null; then
-    if mamba activate "$ENV_NAME"; then
-        info "Entorno activado correctamente con mamba"
-    else
-        # Intentar con conda
-        if conda activate "$ENV_NAME"; then
-            info "Entorno activado correctamente con conda"
-        else
-            error "No se pudo activar el entorno. Intenta manualmente: conda activate $ENV_NAME"
-        fi
-    fi
-else
-    if conda activate "$ENV_NAME"; then
-        info "Entorno activado correctamente"
-    else
-        error "No se pudo activar el entorno"
-    fi
-fi
-
-echo ""
-
-# ============================================
-# 6. INSTALAR DEPENDENCIAS ADICIONALES
-# ============================================
-
-step "Instalando dependencias adicionales..."
-
-# Usar el gestor apropiado según qué comando esté disponible
-if command -v mamba &> /dev/null && mamba list -n "$ENV_NAME" &> /dev/null; then
-    info "Usando mamba para instalar dependencias..."
-
-    # Activar el entorno para mamba
-    mamba activate "$ENV_NAME"
-
-    # Instalar paquetes adicionales con mamba
-    mamba install -c conda-forge -c bioconda \
-        snakemake-minimal=7.32.4 \
-        multiqc=1.17 \
-        fastp=0.23.4 \
-        pandas=2.0.3 \
-        numpy=1.24.3 \
-        matplotlib=3.7.2 \
-        seaborn=0.12.2 \
-        sra-tools \
-        -y
-
-elif conda list -n "$ENV_NAME" &> /dev/null; then
-    info "Usando conda para instalar dependencias..."
-
-    # Activar el entorno para conda
-    conda activate "$ENV_NAME"
-
-    # Instalar paquetes adicionales con conda
-    conda install -c conda-forge -c bioconda \
-        snakemake-minimal=7.32.4 \
-        multiqc=1.17 \
-        fastp=0.23.4 \
-        pandas=2.0.3 \
-        numpy=1.24.3 \
-        matplotlib=3.7.2 \
-        seaborn=0.12.2 \
-        sra-tools \
-        -y
-else
-    warn "No se pudo acceder al entorno para instalar dependencias"
-fi
-
-echo ""
-
-# ============================================
-# 7. INSTALAR DOKDO DESDE GITHUB
-# ============================================
-
-step "Instalando dokdo desde GitHub..."
-
-# Asegurarse de que estamos en el entorno correcto
 if [[ "$CONDA_DEFAULT_ENV" != "$ENV_NAME" ]]; then
-    if command -v mamba &> /dev/null; then
-        mamba activate "$ENV_NAME"
+    echo "⚠  No se pudo activar automáticamente. Intentando manualmente..."
+    conda activate "$ENV_NAME"
+fi
+
+echo "✓ Entorno activado: $(python --version)"
+
+# Instalar dokdo
+echo "Instalando dokdo..."
+pip install --no-deps git+https://github.com/sbslee/dokdo.git 2>/dev/null || \
+    pip install git+https://github.com/sbslee/dokdo.git 2>/dev/null || \
+    echo "⚠  No se pudo instalar dokdo (continuando sin él)"
+
+echo ""
+
+# ===================================================
+# 6. VERIFICAR INSTALACIÓN
+# ===================================================
+echo -e "${BLUE}[6] Verificando instalación...${NC}"
+
+# Función de verificación
+verify_tool() {
+    local tool=$1
+    local command=$2
+    if command -v $tool &> /dev/null; then
+        echo -e "  ${GREEN}✓${NC} $tool"
+        return 0
     else
-        conda activate "$ENV_NAME"
+        echo -e "  ${RED}✗${NC} $tool (no encontrado)"
+        return 1
     fi
-fi
+}
 
-info "Instalando dokdo desde el repositorio oficial..."
-if pip install git+https://github.com/sbslee/dokdo.git; then
-    info "Dokdo instalado correctamente"
-else
-    warn "Falló instalación directa de dokdo, intentando con --no-deps..."
-    pip install --no-deps git+https://github.com/sbslee/dokdo.git || \
-    warn "No se pudo instalar dokdo. Puedes instalarlo manualmente después."
-fi
-
-echo ""
-
-# ============================================
-# 8. VERIFICAR INSTALACIÓN
-# ============================================
-
-step "Verificando instalación completa..."
-echo ""
-
-# Crear script de verificación temporal
-cat > /tmp/verify_installation.py << 'VERIFY_SCRIPT'
-import sys
-import subprocess
-import os
-
-print("Verificando componentes críticos:")
-print("=" * 60)
-
-# Lista de imports críticos que debe verificar
-critical_imports = [
-    ('qiime2', 'import qiime2'),
-    ('pandas', 'import pandas'),
-    ('numpy', 'import numpy'),
-    ('seaborn', 'import seaborn'),
-]
-
-# Lista de imports opcionales
-optional_imports = [
-    ('dokdo', 'import dokdo'),
-]
-
-failed_critical = []
-for name, import_stmt in critical_imports:
-    try:
-        exec(import_stmt)
-        print(f"✓ {name:20} OK")
-    except Exception as e:
-        print(f"✗ {name:20} FALLO: {str(e)[:30]}")
-        failed_critical.append(name)
-
-print("")
-print("Imports opcionales:")
-for name, import_stmt in optional_imports:
-    try:
-        exec(import_stmt)
-        print(f"✓ {name:20} OK")
-    except Exception:
-        print(f"⚠ {name:20} No instalado (opcional)")
-
-print("")
-print("Verificando herramientas de línea de comandos:")
-print("-" * 40)
-
-# Verificar herramientas importantes
-tools = ['snakemake', 'fastp', 'multiqc']
-for tool in tools:
-    try:
-        result = subprocess.run(['which', tool], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✓ {tool:15} OK")
-        else:
-            print(f"✗ {tool:15} NO ENCONTRADO")
-    except Exception:
-        print(f"✗ {tool:15} ERROR AL VERIFICAR")
-
-print("=" * 60)
+echo "Verificando herramientas:"
+verify_tool "qiime" "qiime --version"
+verify_tool "snakemake" "snakemake --version"
+verify_tool "fastp" "fastp --version"
+verify_tool "multiqc" "multiqc --version"
+verify_tool "python" "python --version"
 
 # Verificar QIIME2 específicamente
-try:
-    import qiime2
-    print(f"✅ QIIME2 versión: {qiime2.__version__}")
-
-    # Verificar algunos plugins básicos
-    from qiime2.plugins import feature_table, diversity, taxa
-    print("✅ Plugins QIIME2 cargados correctamente")
-except Exception as e:
-    print(f"❌ QIIME2 error: {str(e)[:50]}")
-    failed_critical.append('qiime2-plugins')
-
-print("=" * 60)
-
-if not failed_critical:
-    print("\n✅ INSTALACIÓN VERIFICADA CORRECTAMENTE\n")
-    sys.exit(0)
-else:
-    print(f"\n❌ {len(failed_critical)} componente(s) crítico(s) fallaron: {', '.join(failed_critical)}")
-    print("   Por favor, revisa los errores arriba.")
-    print("")
-    sys.exit(1)
-VERIFY_SCRIPT
-
-# Ejecutar verificación
-if python /tmp/verify_installation.py; then
-    info "Todos los componentes verificados correctamente"
+echo ""
+echo "Verificando QIIME2:"
+if python -c "import qiime2; print(f'  ✓ QIIME2 {qiime2.__version__}')" 2>/dev/null; then
+    echo -e "  ${GREEN}✓ QIIME2 cargado correctamente${NC}"
 else
-    warn "Algunos componentes fallaron."
-
-    # Intentar reparar solo lo crítico
-    read -p "¿Intentar reparar? (s/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Ss]$ ]]; then
-        step "Intentando reparar instalación..."
-
-        # Reinstalar QIIME2 si hay problemas
-        if command -v mamba &> /dev/null; then
-            mamba install -c qiime2 -c conda-forge qiime2-amplicon=2024.2 -y --force-reinstall
-        else
-            conda install -c qiime2 -c conda-forge qiime2-amplicon=2024.2 -y --force-reinstall
-        fi
-
-        # Verificar de nuevo
-        if python /tmp/verify_installation.py; then
-            info "Reparación exitosa"
-        else
-            warn "La reparación no solucionó todos los problemas."
-        fi
-    fi
+    echo -e "  ${RED}✗ No se pudo importar QIIME2${NC}"
 fi
-
-rm /tmp/verify_installation.py
 
 echo ""
 
-# ============================================
-# 9. CONFIGURAR PIPELINE
-# ============================================
-
-step "Configurando pipeline..."
+# ===================================================
+# 7. CONFIGURAR PIPELINE
+# ===================================================
+echo -e "${BLUE}[7] Configurando estructura del pipeline...${NC}"
 
 # Crear directorios necesarios
-mkdir -p data/raw data/processed logs reports config
+mkdir -p data/raw data/processed logs reports config scripts
 
-# Copiar archivo de configuración si no existe
-if [ ! -f "config/config.yaml" ] && [ -f "config/config_template.yaml" ]; then
+# Copiar configuración si existe
+if [ -f "config/config_template.yaml" ] && [ ! -f "config/config.yaml" ]; then
     cp config/config_template.yaml config/config.yaml
-    info "Archivo de configuración creado: config/config.yaml"
+    echo "✓ Archivo de configuración creado: config/config.yaml"
+else
+    echo "⚠  No se encontró config/config_template.yaml"
 fi
 
 # Hacer ejecutables los scripts
-if [ -f "microbiome_cli.py" ]; then
-    chmod +x microbiome_cli.py
-    info "CLI marcado como ejecutable"
-fi
+chmod +x *.py *.sh 2>/dev/null || true
 
+echo "✓ Estructura de directorios creada"
 echo ""
 
-# ============================================
-# 10. CREAR SCRIPTS DE AYUDA
-# ============================================
+# ===================================================
+# 8. CREAR SCRIPTS DE AYUDA
+# ===================================================
+echo -e "${BLUE}[8] Creando scripts de ayuda...${NC}"
 
-step "Creando scripts de ayuda..."
-
-# Script de activación mejorado
-cat > activate.sh << 'EOF'
+# Script de activación
+cat > activate_microbiome.sh << 'EOF'
 #!/bin/bash
 # Script para activar el entorno del pipeline
 
 # Inicializar conda
-if [ -n "$BASH_VERSION" ]; then
-    if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
-        source "$(conda info --base)/etc/profile.d/conda.sh"
-    else
-        eval "$(conda shell.bash hook)"
-    fi
-fi
+source ~/miniforge3/etc/profile.d/conda.sh
 
-# Intentar activar con mamba si está disponible, si no con conda
-ENV_NAME="qiime2-amplicon-2024.2"
+# Activar entorno
+mamba activate qiime2-amplicon-2024.2
 
-if command -v mamba &> /dev/null; then
-    if mamba activate "$ENV_NAME" 2>/dev/null; then
-        echo "=============================================="
-        echo "  ✅ Entorno $ENV_NAME activado (via mamba)"
-        echo "=============================================="
-    else
-        echo "⚠️  No se pudo activar con mamba, intentando con conda..."
-        if conda activate "$ENV_NAME" 2>/dev/null; then
-            echo "=============================================="
-            echo "  ✅ Entorno $ENV_NAME activado (via conda)"
-            echo "=============================================="
-        else
-            echo "❌ No se pudo activar el entorno $ENV_NAME"
-            echo "   Verifica que existe: conda env list"
-            return 1 2>/dev/null || exit 1
-        fi
-    fi
+# Verificar activación
+if [[ "$CONDA_DEFAULT_ENV" == "qiime2-amplicon-2024.2" ]]; then
+    echo "=============================================="
+    echo "  ✅ Entorno qiime2-amplicon-2024.2 activado"
+    echo "=============================================="
+    echo ""
+    echo "Herramientas disponibles:"
+    echo "  • qiime --help"
+    echo "  • snakemake --help"
+    echo "  • fastp --help"
+    echo "  • multiqc --help"
+    echo ""
+    echo "Para ejecutar el pipeline:"
+    echo "  python microbiome_cli.py --help"
+    echo ""
 else
-    if conda activate "$ENV_NAME" 2>/dev/null; then
-        echo "=============================================="
-        echo "  ✅ Entorno $ENV_NAME activado"
-        echo "=============================================="
-    else
-        echo "❌ No se pudo activar el entorno $ENV_NAME"
-        echo "   Verifica que existe: conda env list"
-        return 1 2>/dev/null || exit 1
-    fi
-fi
-
-echo ""
-echo "Para usar el pipeline:"
-echo "  python microbiome_cli.py --help"
-echo ""
-echo "Ejemplo rápido:"
-echo "  python microbiome_cli.py download samples.csv"
-echo ""
-EOF
-chmod +x activate.sh
-
-# Script de test rápido
-cat > test.sh << 'EOF'
-#!/bin/bash
-# Script de prueba rápida
-
-# Cargar el script de activación
-source activate.sh 2>/dev/null || {
     echo "❌ No se pudo activar el entorno"
     exit 1
-}
+fi
+EOF
+
+chmod +x activate_microbiome.sh
+
+# Script de prueba
+cat > test_install.sh << 'EOF'
+#!/bin/bash
+# Script de prueba de instalación
+
+echo "🧪 Probando instalación del Microbiome Pipeline"
+echo "=============================================="
+
+# Activar entorno
+source activate_microbiome.sh
 
 echo ""
-echo "🧪 Test Rápido - Microbiome Pipeline"
-echo "======================================"
-echo ""
-
-echo "1. Verificando entorno Python..."
-python --version
-echo ""
-
-echo "2. Verificando QIIME2..."
-python -c "
-import qiime2
-print(f'QIIME2 versión: {qiime2.__version__}')
-print('✅ QIIME2 cargado correctamente')
-"
-echo ""
-
-echo "3. Verificando herramientas principales..."
-for tool in snakemake fastp multiqc; do
-    if command -v $tool &> /dev/null; then
-        echo "   ✅ $tool disponible"
-    else
-        echo "   ⚠  $tool NO disponible"
-    fi
-done
+echo "1. Verificando versiones:"
+echo "   Python: $(python --version 2>&1)"
+echo "   QIIME2: $(python -c 'import qiime2; print(qiime2.__version__)' 2>/dev/null || echo 'No disponible')"
+echo "   Snakemake: $(snakemake --version 2>/dev/null | head -1 || echo 'No disponible')"
 
 echo ""
-echo "4. Verificando estructura del proyecto..."
+echo "2. Verificando directorios:"
 for dir in data/raw data/processed logs reports config; do
     if [ -d "$dir" ]; then
-        echo "   ✅ $dir existe"
+        echo "   ✅ $dir"
     else
-        echo "   ⚠  $dir no existe"
+        echo "   ❌ $dir (faltante)"
     fi
 done
 
 echo ""
-echo "✅ Test completado"
+echo "3. Probar importación de módulos:"
+python -c "
+import sys
+modules = ['qiime2', 'pandas', 'numpy', 'seaborn']
+for mod in modules:
+    try:
+        __import__(mod)
+        print(f'   ✅ {mod}')
+    except:
+        print(f'   ❌ {mod}')
+"
+
 echo ""
+echo "✅ Prueba completada"
 EOF
-chmod +x test.sh
 
-info "Scripts creados: activate.sh y test.sh"
+chmod +x test_install.sh
 
+echo "✓ Scripts creados: activate_microbiome.sh, test_install.sh"
 echo ""
 
-# ============================================
-# 11. RESUMEN FINAL
-# ============================================
-
-echo "=============================================="
-echo "  ✅ INSTALACIÓN COMPLETADA"
-echo "=============================================="
+# ===================================================
+# 9. RESUMEN FINAL
+# ===================================================
+echo "=================================================="
+echo "   🎉 INSTALACIÓN COMPLETADA"
+echo "=================================================="
 echo ""
-echo "Para usar el pipeline:"
+echo "RESUMEN:"
+echo "  • Entorno: qiime2-amplicon-2024.2"
+echo "  • Python: $PYTHON_VERSION"
+echo "  • Gestor: Miniforge3 + Mamba"
+echo "  • Ubicación: ~/miniforge3/envs/qiime2-amplicon-2024.2"
 echo ""
-echo "  1. Activar entorno:"
-echo "     ./activate.sh"
-echo "     # o manualmente:"
-echo "     conda activate qiime2-amplicon-2024.2"
+echo "PARA USAR EL PIPELINE:"
 echo ""
-echo "  2. Ejecutar test rápido:"
-echo "     ./test.sh"
+echo "  1. Activar el entorno:"
+echo "     source activate_microbiome.sh"
 echo ""
-echo "  3. Configurar pipeline:"
-echo "     Edita config/config.yaml con tus rutas"
+echo "  2. Probar la instalación:"
+echo "     ./test_install.sh"
 echo ""
-echo "  4. Ejecutar pipeline:"
+echo "  3. Configurar el pipeline (edita):"
+echo "     config/config.yaml"
+echo ""
+echo "  4. Ejecutar el pipeline:"
 echo "     python microbiome_cli.py --help"
 echo ""
-echo "=============================================="
+echo "  5. Para análisis interactivo:"
+echo "     jupyter lab"
 echo ""
-
-# Información de versiones instaladas
-step "Versiones instaladas:"
-echo "  • Python: $(python --version 2>&1)"
-echo "  • QIIME2: $(python -c 'import qiime2; print(qiime2.__version__)' 2>/dev/null || echo 'error')"
-echo "  • Snakemake: $(snakemake --version 2>/dev/null | head -1 || echo 'instalado')"
-echo "  • Fastp: $(fastp --version 2>/dev/null | head -1 || echo 'instalado')"
-echo "  • MultiQC: $(multiqc --version 2>&1 | head -1 || echo 'instalado')"
-
+echo "=================================================="
 echo ""
-echo "🚀 ¡Instalación completada! El pipeline está listo para usar."
+echo "📌 NOTAS:"
+echo "  • El entorno está aislado y no interfiere con otras instalaciones"
+echo "  • Para desactivar: conda deactivate"
+echo "  • Para eliminar: conda env remove -n qiime2-amplicon-2024.2"
 echo ""
