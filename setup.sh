@@ -2,56 +2,66 @@
 set -e
 
 echo "===================================="
-echo " CONFIGURANDO ENTORNO QIIME2 2025.10"
+echo " CONFIGURANDO QIIME2 2024.10 + DEBLUR"
 echo "===================================="
 
-ENV_NAME="qiime2-2025.10"
-
-# Detectar gestor: micromamba → mamba → conda
-if command -v micromamba &>/dev/null; then
-    MANAGER="micromamba"
-    RUN="micromamba run -n $ENV_NAME"
-elif command -v mamba &>/dev/null; then
-    MANAGER="mamba"
-    RUN="mamba run -n $ENV_NAME"
+# -------------------------------------------------------------------
+# Detectar gestor: mamba > conda
+# -------------------------------------------------------------------
+if command -v mamba &> /dev/null; then
+    CMD="mamba"
+    echo ">> Gestor detectado: mamba"
+elif command -v conda &> /dev/null; then
+    CMD="conda"
+    echo ">> Gestor detectado: conda"
 else
-    MANAGER="conda"
-    RUN="conda run -n $ENV_NAME"
+    echo "ERROR: No se encontró conda ni mamba en el sistema."
+    exit 1
 fi
 
-echo ">> Gestor detectado: $MANAGER"
-echo ">> Creando entorno $ENV_NAME..."
+# -------------------------------------------------------------------
+# Nombre del entorno
+# -------------------------------------------------------------------
+ENV_NAME="qiime2-amplicon-2024.10"
 
-$MANAGER create -y -n $ENV_NAME python=3.11
+# -------------------------------------------------------------------
+# URL oficial del entorno QIIME2 Amplicon 2024.10
+# -------------------------------------------------------------------
+YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/2024.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
 
-echo ">> Instalando QIIME2 2025.10..."
-$MANAGER install -y -n $ENV_NAME -c qiime2 -c conda-forge \
-    qiime2 q2cli q2templates
+echo ">> Creando entorno $ENV_NAME usando YAML oficial..."
+$CMD env create \
+    --name "$ENV_NAME" \
+    --file "$YAML_URL" || {
+        echo "El entorno ya existe. Continuando..."
+    }
 
-echo ">> Instalando plugins comunes..."
-$MANAGER install -y -n $ENV_NAME -c qiime2 -c conda-forge \
-    q2-diversity q2-metadata q2-feature-classifier \
-    q2-alignment q2-phylogeny q2-vsearch q2-dada2
+# -------------------------------------------------------------------
+# Activar entorno correctamente
+# -------------------------------------------------------------------
+echo ">> Activando entorno..."
+if [ "$CMD" = "mamba" ]; then
+    eval "$(mamba shell hook --shell bash)"
+else
+    eval "$(conda shell.bash hook)"
+fi
 
-echo ">> Instalando Cutadapt..."
-$MANAGER install -y -n $ENV_NAME -c bioconda cutadapt
+$CMD activate "$ENV_NAME"
 
-echo "===================================="
-echo " INSTALANDO DEBLUR"
-echo "===================================="
+echo ">> Entorno activado: $ENV_NAME"
 
-# pip dentro del entorno SIN activarlo
-$RUN pip install deblur
-$RUN pip install git+https://github.com/biocore/q2-deblur.git
+# -------------------------------------------------------------------
+# Instalación de Deblur (bioconda)
+# Nota: Amplicon ya incluye Deblur, pero forzamos instalación adicional por compatibilidad.
+# -------------------------------------------------------------------
+echo ">> Instalando Deblur desde bioconda..."
+$CMD install -y -c bioconda -c conda-forge deblur
 
-# reconstruir cache de QIIME2
-$RUN qiime dev refresh-cache
-
-echo "===================================="
-echo " INSTALACIÓN COMPLETA"
 echo ""
-echo " Para activar el entorno:"
-echo ""
-echo "   $MANAGER activate $ENV_NAME"
-echo ""
 echo "===================================="
+echo "  INSTALACIÓN COMPLETA"
+echo "===================================="
+echo "Para activar QIIME2 en nuevas sesiones:"
+echo ""
+echo "    $CMD activate $ENV_NAME"
+echo ""
