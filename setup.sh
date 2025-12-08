@@ -2,38 +2,66 @@
 set -e
 
 echo "===================================="
-echo " CONFIGURANDO QIIME2 2025.10 + DEBLUR"
+echo " INSTALANDO QIIME2 2025.10 + DEBLUR"
+echo "    (compilado desde fuente)"
 echo "===================================="
 
-# Detectar gestor
+# Detect conda/mamba
 if command -v mamba &> /dev/null; then
-    PM="mamba"
-    echo ">> Gestor detectado: mamba"
+    CMD=mamba
 else
-    PM="conda"
-    echo ">> Gestor detectado: conda"
+    CMD=conda
 fi
+
+echo ">> Gestor detectado: $CMD"
 
 ENV_NAME="qiime2-amplicon-2025.10"
 YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2025.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
 
-# Crear entorno si no existe
-if ! conda env list | grep -q "$ENV_NAME"; then
-    echo ">> Creando entorno $ENV_NAME usando YAML oficial..."
-    $PM env create --name $ENV_NAME --file "$YAML_URL"
-else
-    echo ">> El entorno $ENV_NAME ya existe. Continuando..."
-fi
+echo ">> Creando entorno QIIME2 desde YAML oficial..."
+$CMD env create -n $ENV_NAME --file $YAML_URL || echo ">> El entorno ya existe, continuando..."
 
 echo ">> Activando entorno..."
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate $ENV_NAME
+eval "$($CMD shell hook)"
+$CMD activate $ENV_NAME
 
-echo ">> Instalando Deblur..."
-$PM install -y -c bioconda deblur
+echo "===================================="
+echo " INSTALANDO DEPENDENCIAS PARA DEBLUR"
+echo "===================================="
 
-echo ">> Instalación completa!"
-echo "------------------------------------"
-echo " Para usar QIIME2 ejecutar:"
-echo "   conda activate $ENV_NAME"
-echo "------------------------------------"
+$CMD install -y -c conda-forge cython numpy h5py scipy
+
+echo "===================================="
+echo " COMPILANDO SORTMERNA 2.0"
+echo "===================================="
+
+cd /tmp
+git clone https://github.com/biocore/sortmerna.git --branch v2.0 --depth 1
+cd sortmerna
+mkdir build && cd build
+cmake ..
+make -j4
+
+echo ">> Instalando SortMeRNA en el entorno..."
+cp sortmerna $CONDA_PREFIX/bin/
+cp scripts/* $CONDA_PREFIX/bin/ 2>/dev/null || true
+
+echo "===================================="
+echo " COMPILANDO DEBLUR"
+echo "===================================="
+
+cd /tmp
+git clone https://github.com/biocore/deblur.git --branch 1.1.1 --depth 1
+cd deblur
+
+$CONDA_PREFIX/bin/python -m pip install .
+
+echo "===================================="
+echo " VERIFICANDO INSTALACIÓN"
+echo "===================================="
+
+deblur --help && echo ">> Deblur instalado correctamente dentro del entorno" || echo ">> ERROR: Deblur no se instaló"
+
+echo "===================================="
+echo "   QIIME2 2025.10 + DEBLUR LISTO"
+echo "===================================="
