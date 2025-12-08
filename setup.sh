@@ -1,47 +1,40 @@
 #!/usr/bin/env bash
 set -e
 
-echo "============================================"
-echo " INSTALANDO QIIME2 2024.10 + DEBLUR FUNCIONAL"
-echo "============================================"
+echo "==============================="
+echo " Instalando QIIME2 2024.10"
+echo "==============================="
 
-# Forzar siempre conda (micromamba rompe el entorno)
-CONDA=$(conda info --base)
-source $CONDA/etc/profile.d/conda.sh
-
-MAMBA="conda"   # <--- fuerza el uso de conda SIEMPRE
+# Cargar conda
+CONDA_BASE=$(conda info --base)
+source $CONDA_BASE/etc/profile.d/conda.sh
 
 ENV="qiime2-2024.10"
 
-echo ">> Creando entorno con CONDA"
-conda create -y -n $ENV python=3.10
+echo ">> Eliminando entorno previo si existe..."
+conda env remove -n $ENV -y || true
 
-echo ">> Activando entorno"
+echo ">> Creando entorno desde el YAML oficial..."
+conda env create \
+  -n $ENV \
+  -f https://raw.githubusercontent.com/qiime2/distributions/2024.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml
+
+echo ">> Activando entorno..."
 conda activate $ENV
 
-echo ">> Instalando QIIME2 2024.10"
-conda install -y -c qiime2 -c conda-forge \
-    qiime2=2024.10 \
-    qiime-q2cli=2024.10 \
-    q2templates=2024.10
+echo ">> Verificando instalación de qiime CLI..."
+qiime --help >/dev/null 2>&1 && echo "QIIME CLI OK" || { echo "ERROR: qiime no está instalado"; exit 1; }
 
-echo ">> Instalando dependencias Deblur"
-conda install -y -c bioconda -c conda-forge \
-    sortmerna=2.0 \
-    vsearch \
-    numpy \
-    cython
+echo ">> Instalando Deblur dentro del entorno..."
+conda install -y -c bioconda -c conda-forge deblur=1.1.1
 
-echo ">> Instalando Deblur"
-conda install -y -c bioconda deblur=1.1.1
-
-echo ">> Verificando el plugin"
+echo ">> Verificando plugin Deblur..."
 python - <<EOF
 from qiime2.plugins.deblur.methods import denoise_16S
-print("Deblur cargado OK")
+print("Deblur OK")
 EOF
 
-echo "============================================"
-echo "     QIIME2 + Deblur instalados exitosamente"
-echo "     Ejecutar: conda activate $ENV"
-echo "============================================"
+echo "=================================="
+echo " QIIME2 + Deblur instalados OK"
+echo " Activar con: conda activate $ENV"
+echo "=================================="
