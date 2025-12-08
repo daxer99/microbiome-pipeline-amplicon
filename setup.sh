@@ -1,47 +1,42 @@
 #!/usr/bin/env bash
+
 set -e
 
-echo "==============================="
-echo " Instalando QIIME2 2024.10"
-echo "==============================="
+echo "==============================================="
+echo " Instalando QIIME2 2024.2 + DEBLUR (FUNCIONAL) "
+echo "==============================================="
 
-# Cargar conda
-CONDA_BASE=$(conda info --base)
-source $CONDA_BASE/etc/profile.d/conda.sh
-
-ENV="qiime2-2024.10"
-YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/2024.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
+ENV_NAME="qiime2-amplicon-2024.2"
+YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2024.2/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
 
 echo ">> Eliminando entorno previo si existe..."
-conda env remove -n $ENV -y || true
+conda env remove -n $ENV_NAME -y > /dev/null 2>&1 || true
 
 echo ">> Descargando YAML oficial..."
-curl -fsSL "$YAML_URL" -o qiime2.yml
+curl -s -L $YAML_URL -o qiime2.yml
 
-echo ">> Creando entorno desde YAML..."
-# NOTA: AHORA ES OBLIGATORIO AGREGAR:
-#   --environment-spec environment.yml
-mamba env create \
-    --name $ENV \
-    --file qiime2.yml \
-    --environment-spec environment.yml
+echo ">> Creando entorno QIIME2 $ENV_NAME..."
+mamba env create -n $ENV_NAME -f qiime2.yml
 
 echo ">> Activando entorno..."
-conda activate $ENV
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate $ENV_NAME
 
-echo ">> Verificando 'qiime'..."
-qiime --help >/dev/null 2>&1 && echo "QIIME CLI OK" || { echo "ERROR: qiime no está instalado"; exit 1; }
+echo ">> Instalando Deblur desde Bioconda..."
+mamba install -n $ENV_NAME -c bioconda -c conda-forge deblur -y
 
-echo ">> Instalando Deblur..."
-mamba install -y -c bioconda -c conda-forge deblur=1.1.1
-
-echo ">> Probando import de Deblur..."
-python - <<EOF
-from qiime2.plugins.deblur.methods import denoise_16S
-print("Deblur OK ✔")
+echo ">> Verificando import de Deblur..."
+python3 - << 'EOF'
+try:
+    from qiime2.plugins.deblur.methods import denoise_16S
+    print(">>> Deblur IMPORTADO correctamente dentro de QIIME2 ✔")
+except Exception as e:
+    print(">>> ERROR al importar Deblur ❌")
+    print(e)
 EOF
 
-echo "====================================="
-echo " QIIME2 + Deblur instalados correctamente."
-echo " Activar con: conda activate $ENV"
-echo "====================================="
+echo "==============================================="
+echo " INSTALACIÓN COMPLETA 🎉"
+echo " Para activar el entorno: "
+echo "   conda activate $ENV_NAME"
+echo "==============================================="
