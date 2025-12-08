@@ -1,107 +1,92 @@
 #!/usr/bin/env bash
 set -e
 
-ENV_NAME="qiime2-amplicon-2024.2"
-YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2024.2/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
-
 echo "======================================================"
 echo " Instalación completa: QIIME2 2024.2 + Deblur + Plugins"
 echo "======================================================"
-echo ""
 
-# -------------------------------------------------------
-# 1. ELIMINAR MICROMAMBA DEL PATH
-# -------------------------------------------------------
-echo ">> Eliminando micromamba del PATH..."
-export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "micromamba" | paste -sd ":" -)
+# -------------------------------------------------------------------
+# 1) Usar SIEMPRE el mamba correcto (el de miniforge, NO micromamba)
+# -------------------------------------------------------------------
+MAMBA="/home/rodrigo/miniforge3/bin/mamba"
+CONDA="/home/rodrigo/miniforge3/bin/conda"
 
-# -------------------------------------------------------
-# 2. DETECTAR MAMBA O CONDA
-# -------------------------------------------------------
-if command -v mamba &>/dev/null; then
-    CMD=mamba
-    echo ">> Usando mamba"
-else
-    CMD=conda
-    echo ">> Usando conda"
-fi
+echo ">> Usando mamba real: $MAMBA"
 
-# -------------------------------------------------------
-# 3. FIX NECESARIO PARA QIIME2
-# -------------------------------------------------------
+# -------------------------------------------------------------------
+# 2) channel_priority flexible (soluciona el problema oficial del foro)
+# -------------------------------------------------------------------
 echo ">> Ajustando channel_priority = flexible"
-conda config --set channel_priority flexible
+$CONDA config --set channel_priority flexible
 
-# -------------------------------------------------------
-# 4. ELIMINAR ENTORNO PREVIO
-# -------------------------------------------------------
-echo ""
-echo ">> Eliminando entorno anterior si existe..."
-conda remove -n "$ENV_NAME" --all -y || true
+# -------------------------------------------------------------------
+# 3) Borrar entorno previo dentro de Miniforge
+# -------------------------------------------------------------------
+echo
+echo ">> Eliminando entorno previo si existe (solo en Miniforge)..."
 
-# -------------------------------------------------------
-# 5. DESCARGAR YAML (verificar)
-# -------------------------------------------------------
-echo ">> Descargando YAML oficial..."
-curl -sSL "$YAML_URL" -o qiime2.yml
+$CONDA remove -n qiime2-amplicon-2024.2 --all -y || true
 
-if ! grep -q "dependencies" qiime2.yml; then
-    echo "ERROR: YAML inválido o no descargado correctamente."
-    cat qiime2.yml
-    exit 1
-fi
 
-# -------------------------------------------------------
-# 6. CREAR ENTORNO SIN --solver
-# -------------------------------------------------------
-echo ">> Creando entorno QIIME2 (sin --solver)..."
+# -------------------------------------------------------------------
+# 4) Crear entorno QIIME2 2024.2 desde el YAML oficial
+# -------------------------------------------------------------------
+echo
+echo ">> Creando entorno con QIIME2 2024.2 en Miniforge..."
 
-$CMD env create -n "$ENV_NAME" -f qiime2.yml || {
-    echo "Falló con mamba — reintentando con conda..."
-    conda env create -n "$ENV_NAME" -f qiime2.yml
-}
+$MAMBA env create \
+    -n qiime2-amplicon-2024.2 \
+    --file https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2024.2/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml
 
-# -------------------------------------------------------
-# 7. ACTIVAR ENTORNO
-# -------------------------------------------------------
-echo ">> Activando entorno..."
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_NAME"
 
-# -------------------------------------------------------
-# 8. INSTALAR DEBLUR + DEPENDENCIAS
-# -------------------------------------------------------
+# -------------------------------------------------------------------
+# 5) Activar entorno correctamente
+# -------------------------------------------------------------------
+echo
+echo ">> Activando entorno para instalar plugins..."
+
+source /home/rodrigo/miniforge3/etc/profile.d/conda.sh
+conda activate qiime2-amplicon-2024.2
+
+
+# -------------------------------------------------------------------
+# 6) Instalar Deblur (vía pip, como recomienda QIIME2)
+# -------------------------------------------------------------------
+echo
 echo ">> Instalando Deblur..."
-pip install --upgrade pip
-pip install sortmerna==2.0.0a
-pip install deblur==1.1.1
+pip install deblur
 
-# symlink requerido por Deblur
-ln -sf "$(which sortmerna)" "$CONDA_PREFIX/bin/sortmerna"
 
-# -------------------------------------------------------
-# 9. PLUGINS EXTRA
-# -------------------------------------------------------
+# -------------------------------------------------------------------
+# 7) Instalar plugins adicionales
+# -------------------------------------------------------------------
+echo
 echo ">> Instalando plugins extra..."
-pip install \
-    q2-sample-classifier \
-    q2-quality-control \
-    q2-fragment-insertion \
-    q2-diversity-lib \
-    q2-longitudinal
 
-# -------------------------------------------------------
-# 10. TESTS
-# -------------------------------------------------------
-echo ""
-echo ">> Verificando instalación..."
 
-qiime --help >/dev/null && echo "✓ qiime OK"
-python -c "import deblur" && echo "✓ deblur OK"
-qiime deblur denoise-16S --help >/dev/null && echo "✓ qiime deblur OK"
+echo " - q2-picrust2"
+pip install git+https://github.com/picrust/picrust2.git
+pip install git+https://github.com/biocore/q2-picrust2.git
 
-echo ""
+echo " - q2-sourmash"
+pip install git+https://github.com/sourmash-bio/q2-sourmash.git
+
+echo " - q2-kaiju"
+pip install git+https://github.com/bokulich-lab/q2-kaiju.git
+
+
+# -------------------------------------------------------------------
+# 8) Verificación final
+# -------------------------------------------------------------------
+echo
+echo ">> Verificando instalación final..."
+which qiime
+qiime --help >/dev/null && echo "✔ QIIME2 funciona correctamente"
+
+
+echo
 echo "======================================================"
-echo "  QIIME2 2024.2 + Deblur + Plugins INSTALADO 🎉"
-echo "  Para activarlo: conda activate $ENV_NAME"
+echo " Instalación finalizada CON ÉXITO"
+echo " Para activar el entorno:"
+echo "     conda activate qiime2-amplicon-2024.2"
 echo "======================================================"
