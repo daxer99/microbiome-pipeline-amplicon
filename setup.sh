@@ -1,67 +1,53 @@
 #!/usr/bin/env bash
+
 set -e
 
-echo "===================================="
-echo " INSTALANDO QIIME2 2025.10 + DEBLUR"
-echo "    (compilado desde fuente)"
-echo "===================================="
+echo "============================================"
+echo " INSTALANDO QIIME2 2024.10 + DEBLUR FUNCIONAL"
+echo "============================================"
 
-# Detect conda/mamba
+# Detectar conda o mamba
 if command -v mamba &> /dev/null; then
-    CMD=mamba
+    MAMBA=mamba
+    echo ">> Usando mamba"
 else
-    CMD=conda
+    MAMBA=conda
+    echo ">> Usando conda"
 fi
 
-echo ">> Gestor detectado: $CMD"
+ENV_NAME="qiime2-2024.10"
 
-ENV_NAME="qiime2-amplicon-2025.10"
-YAML_URL="https://raw.githubusercontent.com/qiime2/distributions/refs/heads/dev/2025.10/amplicon/released/qiime2-amplicon-ubuntu-latest-conda.yml"
+echo ">> Creando entorno $ENV_NAME"
+$MAMBA create -y -n $ENV_NAME python=3.10
 
-echo ">> Creando entorno QIIME2 desde YAML oficial..."
-$CMD env create -n $ENV_NAME --file $YAML_URL || echo ">> El entorno ya existe, continuando..."
+echo ">> Activando entorno"
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate $ENV_NAME
 
-echo ">> Activando entorno..."
-eval "$($CMD shell hook)"
-$CMD activate $ENV_NAME
+echo ">> Instalando QIIME2 2024.10"
+$MAMBA install -y -c qiime2 -c conda-forge \
+    qiime2=2024.10 \
+    qiime-q2cli=2024.10 \
+    q2templates=2024.10
 
-echo "===================================="
-echo " INSTALANDO DEPENDENCIAS PARA DEBLUR"
-echo "===================================="
+echo ">> Instalando dependencias para Deblur"
+$MAMBA install -y -c bioconda -c conda-forge \
+    sortmerna=2.0 \
+    vsearch \
+    numpy \
+    cython
 
-$CMD install -y -c conda-forge cython numpy h5py scipy
+echo ">> Instalando Deblur 1.1.1 desde bioconda"
+$MAMBA install -y -c bioconda deblur=1.1.1
 
-echo "===================================="
-echo " COMPILANDO SORTMERNA 2.0"
-echo "===================================="
+echo ">> Registrando plugin Deblur en QIIME2"
+python - <<EOF
+import qiime2.sdk
+import q2_deblur
+print("Deblur cargado correctamente:", q2_deblur)
+EOF
 
-cd /tmp
-git clone https://github.com/biocore/sortmerna.git --branch v2.0 --depth 1
-cd sortmerna
-mkdir build && cd build
-cmake ..
-make -j4
-
-echo ">> Instalando SortMeRNA en el entorno..."
-cp sortmerna $CONDA_PREFIX/bin/
-cp scripts/* $CONDA_PREFIX/bin/ 2>/dev/null || true
-
-echo "===================================="
-echo " COMPILANDO DEBLUR"
-echo "===================================="
-
-cd /tmp
-git clone https://github.com/biocore/deblur.git --branch 1.1.1 --depth 1
-cd deblur
-
-$CONDA_PREFIX/bin/python -m pip install .
-
-echo "===================================="
-echo " VERIFICANDO INSTALACIÓN"
-echo "===================================="
-
-deblur --help && echo ">> Deblur instalado correctamente dentro del entorno" || echo ">> ERROR: Deblur no se instaló"
-
-echo "===================================="
-echo "   QIIME2 2025.10 + DEBLUR LISTO"
-echo "===================================="
+echo "============================================"
+echo "   QIIME2 + DEBLUR instalado correctamente"
+echo "   Activar con: conda activate $ENV_NAME"
+echo "============================================"
