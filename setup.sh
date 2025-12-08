@@ -18,46 +18,42 @@ else
   echo ">> Usando conda"
 fi
 
-echo ">> Eliminando entorno previo, si existe..."
+echo ">> Eliminando entorno previo si existe..."
 $CMD env remove -n $ENV_NAME --yes >/dev/null 2>&1 || true
 
-echo ">> Descargando YAML oficial de QIIME2 2024.5..."
+echo ">> Descargando YAML oficial..."
 curl -L $YAML_URL -o $YAML_FILE
 
-if [ ! -s "$YAML_FILE" ]; then
-  echo "ERROR: No se pudo descargar el YAML de QIIME2."
-  exit 1
+echo ">> Verificando que el YAML sea válido..."
+if ! grep -q "dependencies:" "$YAML_FILE"; then
+    echo "ERROR: Archivo YAML inválido o corrupto."
+    echo "Descargado:"
+    head "$YAML_FILE"
+    exit 1
 fi
 
 echo ">> Creando entorno $ENV_NAME..."
 $CMD env create -n $ENV_NAME --file $YAML_FILE
 
 echo ">> Activando entorno..."
-source $(dirname $(which $CMD))/../etc/profile.d/conda.sh
+source $(dirname $(which conda))/../etc/profile.d/conda.sh
 conda activate $ENV_NAME
 
-echo ">> Instalando Deblur dentro del entorno..."
+echo ">> Instalando Deblur..."
 pip install --no-cache-dir deblur
 
-echo ">> Verificando instalación..."
-if ! command -v qiime &> /dev/null; then
-  echo "ERROR: QIIME2 no se instaló correctamente."
-  exit 1
-fi
-
-echo ">> Probando importación de Deblur en QIIME2..."
+echo ">> Probando import de Deblur en QIIME2..."
 python - <<'EOF'
 try:
     from qiime2.plugins.deblur.methods import denoise_16S
-    print("OK: Deblur está disponible dentro de QIIME2.")
+    print("OK: Deblur está disponible.")
 except Exception as e:
-    print("ERROR: Deblur NO está disponible en QIIME2.")
+    print("ERROR: Deblur no se cargó.")
     print(e)
     exit(1)
 EOF
 
-echo ""
 echo "==========================================="
 echo " QIIME2 2024.5 + Deblur instalado con éxito"
-echo " Para usarlo:  conda activate $ENV_NAME"
+echo " Activar con: conda activate $ENV_NAME"
 echo "==========================================="
