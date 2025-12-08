@@ -1,42 +1,72 @@
 #!/usr/bin/env bash
+
 set -e
 
-echo "======================================"
-echo "  Instalación QIIME2 Amplicon (latest) "
-echo "======================================"
+echo "===================================="
+echo "   CONFIGURANDO ENTORNO QIIME2"
+echo "            Version 2025.10"
+echo "===================================="
 
-# Nombre del entorno
-ENV_NAME="qiime2-amplicon-latest"
+ENV_NAME="qiime2-2025.10"
 
-# URL del archivo .yml oficial para Linux
-YML_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-linux-conda.yml"
+echo ">> Detectando base de conda..."
+source "$(conda info --base)/etc/profile.d/conda.sh"
 
-YML_FILE="qiime2-amplicon-latest.yml"
+echo ">> Creando entorno '${ENV_NAME}' con Python 3.11..."
+mamba create -y -n ${ENV_NAME} python=3.11
 
-echo "[1/5] Descargando definición del entorno..."
-if command -v wget >/dev/null 2>&1; then
-  wget -O ${YML_FILE} ${YML_URL} || { echo "ERROR: wget falló"; exit 1; }
-elif command -v curl >/dev/null 2>&1; then
-  curl -o ${YML_FILE} ${YML_URL} || { echo "ERROR: curl falló"; exit 1; }
-else
-  echo "ERROR: no tenés ni wget ni curl instalados. Instalalos primero."; exit 1
-fi
-
-echo "[OK] Archivo descargado: ${YML_FILE}"
-
-echo "[2/5] Creando entorno conda \"${ENV_NAME}\"..."
-conda env create -n ${ENV_NAME} --file ${YML_FILE}
-
-echo "[3/5] Activando entorno..."
-# Cargar configuración de shell si hace falta
-if [[ $SHELL == *"bash"* ]]; then
-  source ~/.bashrc 2>/dev/null || true
-elif [[ $SHELL == *"zsh"* ]]; then
-  source ~/.zshrc 2>/dev/null || true
-fi
+echo ">> Activando entorno..."
 conda activate ${ENV_NAME}
 
-echo "[4/5] Verificando instalación de QIIME2..."
-qiime --help || { echo "ERROR: QIIME2 no se instaló correctamente"; exit 1; }
+echo ">> Instalando QIIME2 2025.10 siguiendo el Quickstart oficial..."
+mamba install -y -c qiime2 -c conda-forge \
+    qiime2 q2cli q2templates
 
-echo "[5/5] Instalación completada. Entorno activo: ${ENV_NAME}"
+echo ">> Instalando plugins estándar del pipeline..."
+mamba install -y -c qiime2 -c conda-forge \
+    q2-dada2 \
+    q2-vsearch \
+    q2-diversity \
+    q2-feature-classifier \
+    q2-alignment \
+    q2-phylogeny \
+    q2-feature-table \
+    q2-diversity \
+    q2-metadata \
+    q2-taxa \
+    q2-types \
+    q2-stats \
+    q2-demux \
+    q2-quality-control
+
+
+
+echo ">> Instalando Cutadapt (requerido para trimming)..."
+mamba install -y -c bioconda cutadapt
+
+echo ">> Instalando dependencias externas útiles..."
+mamba install -y -c conda-forge \
+    pandas \
+    biom-format \
+    scikit-bio \
+    matplotlib \
+    wget
+
+echo "===================================="
+echo "     INSTALANDO DEBLUR MANUALMENTE"
+echo "===================================="
+
+echo ">> Instalando Deblur desde pip (método recomendado por los autores)..."
+pip install deblur
+
+echo ">> Instalando plugin de Deblur para QIIME2..."
+pip install git+https://github.com/biocore/q2-deblur.git
+
+echo ">> Registrando plugins..."
+qiime dev refresh-cache
+
+echo "===================================="
+echo "  INSTALACIÓN COMPLETADA CORRECTAMENTE"
+echo "===================================="
+echo "Para usar QIIME2 2025.10 ejecuta:"
+echo "       conda activate ${ENV_NAME}"
