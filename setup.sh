@@ -1,179 +1,205 @@
 #!/bin/bash
-# install_from_environment.sh
-# Instalación usando el environment.yml existente
+
+# Colores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Nombre del entorno
+ENV_NAME="qiime2-amplicon-2024.10"
 
 echo "=============================================="
-echo "   Instalación desde environment.yml"
+echo "   Instalación de Microbiome Pipeline"
+echo "   QIIME2 Amplicon 2024.10"
 echo "=============================================="
+echo ""
 
-# 1. Inicializar Miniforge3
-source ~/miniforge3/etc/profile.d/conda.sh
-
-# 2. Instalar mamba si no está
-if ! command -v mamba &> /dev/null; then
-    echo "Instalando mamba..."
-    conda install -n base -c conda-forge mamba -y
-fi
-
-# 3. Limpiar entorno anterior
-echo "Limpiando entorno anterior..."
-conda deactivate 2>/dev/null || true
-conda env remove -n qiime2-amplicon-2024.2 -y 2>/dev/null || true
-rm -rf ~/miniforge3/envs/qiime2-amplicon-2024.2 2>/dev/null || true
-
-# 4. Verificar que environment.yml existe
-if [ ! -f "environment.yml" ]; then
-    echo "❌ Error: No se encuentra environment.yml"
+# Verificar que conda está instalado
+if ! command -v conda &> /dev/null; then
+    echo -e "${RED}❌ Error: conda no está instalado${NC}"
+    echo "Por favor instala Miniconda o Anaconda primero:"
+    echo "https://docs.conda.io/en/latest/miniconda.html"
     exit 1
 fi
 
-echo "Usando environment.yml para crear el entorno..."
-echo "Esto puede tardar 20-30 minutos..."
+echo -e "${GREEN}✓${NC} conda encontrado"
 
-# 5. Crear entorno desde environment.yml
-mamba env create -n qiime2-amplicon-2024.2 -f environment.yml
-
-if [ $? -eq 0 ]; then
-    echo "✅ Entorno creado exitosamente"
-else
-    echo "❌ Error al crear entorno. Intentando con conda..."
-    conda env create -n qiime2-amplicon-2024.2 -f environment.yml || {
-        echo "❌ Error crítico: No se pudo crear el entorno"
-        exit 1
-    }
-fi
-
-# 6. Activar entorno
-echo "Activando entorno..."
-mamba activate qiime2-amplicon-2024.2 || conda activate qiime2-amplicon-2024.2
-
-# 7. Instalar dependencias adicionales del pipeline
-echo "Instalando dependencias adicionales..."
-
-# Snakemake y herramientas específicas del pipeline
-mamba install -c conda-forge -c bioconda \
-    snakemake-minimal=7.32.4 \
-    multiqc=1.17 \
-    fastp=0.23.4 \
-    sra-tools \
-    -y
-
-# 8. Instalar dokdo
-echo "Instalando dokdo..."
-pip install git+https://github.com/sbslee/dokdo.git 2>/dev/null || {
-    echo "Instalando dokdo con --no-deps..."
-    pip install --no-deps git+https://github.com/sbslee/dokdo.git
-}
-
-# 9. Verificar instalación
-echo "Verificando instalación..."
+# Actualizar conda
 echo ""
-echo "=== VERSIONES INSTALADAS ==="
-python -c "import qiime2; print(f'QIIME2: {qiime2.__version__}')" 2>/dev/null || echo "QIIME2: ❌ No disponible"
-snakemake --version 2>/dev/null | head -1 || echo "Snakemake: ❌ No disponible"
-fastp --version 2>/dev/null | head -1 || echo "Fastp: ❌ No disponible"
-multiqc --version 2>&1 | head -1 || echo "MultiQC: ❌ No disponible"
+echo "Actualizando conda..."
+conda update -n base -c defaults conda -y
 
-# 10. Configurar directorios
-echo ""
-echo "Configurando estructura del pipeline..."
-mkdir -p data/raw data/processed logs reports config scripts
-
-if [ -f "config/config_template.yaml" ] && [ ! -f "config/config.yaml" ]; then
-    cp config/config_template.yaml config/config.yaml
-    echo "✅ Archivo de configuración creado: config/config.yaml"
-fi
-
-# 11. Crear scripts de ayuda
-echo "Creando scripts de ayuda..."
-
-cat > activate_microbiome.sh << 'EOF'
-#!/bin/bash
-# Script para activar el entorno del pipeline
-
-# Inicializar conda
-source ~/miniforge3/etc/profile.d/conda.sh
-
-# Activar entorno
-mamba activate qiime2-amplicon-2024.2 2>/dev/null || conda activate qiime2-amplicon-2024.2
-
-if [[ "$CONDA_DEFAULT_ENV" == "qiime2-amplicon-2024.2" ]]; then
-    echo "=============================================="
-    echo "  ✅ Entorno qiime2-amplicon-2024.2 activado"
-    echo "=============================================="
+# Eliminar entorno anterior si existe
+if conda env list | grep -q "^${ENV_NAME} "; then
     echo ""
-    echo "Herramientas disponibles:"
-    echo "  • qiime --help"
-    echo "  • snakemake --help"
-    echo ""
-    echo "Para ejecutar el pipeline:"
-    echo "  python microbiome_cli.py --help"
-    echo ""
-else
-    echo "❌ No se pudo activar el entorno"
-    exit 1
-fi
-EOF
-
-chmod +x activate_microbiome.sh
-
-cat > test_installation.sh << 'EOF'
-#!/bin/bash
-echo "🧪 Probando instalación del Microbiome Pipeline"
-echo "=============================================="
-
-# Activar entorno
-source activate_microbiome.sh 2>/dev/null || {
-    echo "❌ No se pudo activar el entorno"
-    exit 1
-}
-
-echo ""
-echo "1. Verificando herramientas principales:"
-tools=("qiime" "snakemake" "fastp" "multiqc" "vsearch" "cutadapt")
-for tool in "${tools[@]}"; do
-    if command -v $tool &> /dev/null; then
-        echo "   ✅ $tool disponible"
+    echo -e "${YELLOW}⚠ Entorno '${ENV_NAME}' ya existe${NC}"
+    read -p "¿Deseas eliminarlo y crear uno nuevo? (s/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
+        echo "Eliminando entorno anterior..."
+        conda env remove -n ${ENV_NAME} -y
     else
-        echo "   ❌ $tool NO disponible"
+        echo "Cancelando instalación."
+        exit 0
     fi
-done
+fi
+
+# Detectar sistema operativo
+OS_TYPE=$(uname -s)
+ARCH_TYPE=$(uname -m)
 
 echo ""
-echo "2. Verificando Python y módulos:"
-python -c "
-modules = ['qiime2', 'pandas', 'numpy', 'biom']
-for mod in modules:
-    try:
-        __import__(mod)
-        print(f'   ✅ {mod}')
-    except ImportError:
-        print(f'   ❌ {mod}')
-"
+echo "Sistema detectado: ${OS_TYPE} ${ARCH_TYPE}"
 
-echo ""
-echo "✅ Prueba completada"
-EOF
+# Determinar URL del archivo de entorno según el sistema
+if [[ "$OS_TYPE" == "Linux" ]]; then
+    QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-linux-conda.yml"
+    echo "Usando configuración para Linux"
+elif [[ "$OS_TYPE" == "Darwin" ]]; then
+    if [[ "$ARCH_TYPE" == "arm64" ]]; then
+        # Mac con Apple Silicon (M1/M2/M3)
+        echo -e "${YELLOW}Detectado Mac con Apple Silicon${NC}"
+        echo "Configurando instalación en modo Rosetta 2..."
+        CONDA_SUBDIR=osx-64
+        export CONDA_SUBDIR
+        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
+    else
+        # Mac Intel
+        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
+        echo "Usando configuración para Mac Intel"
+    fi
+else
+    echo -e "${RED}❌ Sistema operativo no soportado: ${OS_TYPE}${NC}"
+    exit 1
+fi
 
-chmod +x test_installation.sh
-
-# 12. Final
+# Crear entorno QIIME2
 echo ""
 echo "=============================================="
-echo "   ✅ INSTALACIÓN COMPLETADA"
+echo "Creando entorno ${ENV_NAME}..."
+echo "Esto puede tardar 10-20 minutos..."
+echo "=============================================="
+echo ""
+
+if conda env create -n ${ENV_NAME} --file ${QIIME_URL}; then
+    echo -e "${GREEN}✓ Entorno QIIME2 creado exitosamente${NC}"
+else
+    echo -e "${RED}❌ Error al crear el entorno QIIME2${NC}"
+    exit 1
+fi
+
+# Activar entorno
+echo ""
+echo "Activando entorno..."
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate ${ENV_NAME}
+
+if [[ $CONDA_DEFAULT_ENV != ${ENV_NAME} ]]; then
+    echo -e "${RED}❌ Error al activar el entorno${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Entorno activado${NC}"
+
+# Instalar dependencias adicionales
+echo ""
+echo "=============================================="
+echo "Instalando dependencias adicionales..."
+echo "=============================================="
+echo ""
+
+# PICRUSt2
+echo "Instalando PICRUSt2..."
+if conda install -c bioconda -c conda-forge picrust2 -y; then
+    echo -e "${GREEN}✓ PICRUSt2 instalado${NC}"
+else
+    echo -e "${YELLOW}⚠ Advertencia: Error al instalar PICRUSt2${NC}"
+fi
+
+# SRA Toolkit para descarga de datos
+echo ""
+echo "Instalando SRA Toolkit..."
+if conda install -c bioconda sra-tools -y; then
+    echo -e "${GREEN}✓ SRA Toolkit instalado${NC}"
+else
+    echo -e "${YELLOW}⚠ Advertencia: Error al instalar SRA Toolkit${NC}"
+fi
+
+# Paquetes de Python adicionales
+echo ""
+echo "Instalando paquetes de Python adicionales..."
+if pip install dokdo==1.16.0; then
+    echo -e "${GREEN}✓ dokdo instalado${NC}"
+else
+    echo -e "${YELLOW}⚠ Advertencia: Error al instalar dokdo${NC}"
+fi
+
+# Verificar instalación
+echo ""
+echo "=============================================="
+echo "Verificando instalación..."
+echo "=============================================="
+echo ""
+
+# Verificar QIIME2
+if qiime --version &> /dev/null; then
+    QIIME_VERSION=$(qiime --version 2>&1)
+    echo -e "${GREEN}✓ QIIME2: ${QIIME_VERSION}${NC}"
+else
+    echo -e "${RED}❌ Error: QIIME2 no se instaló correctamente${NC}"
+    exit 1
+fi
+
+# Verificar PICRUSt2
+if command -v picrust2_pipeline.py &> /dev/null; then
+    PICRUST_VERSION=$(picrust2_pipeline.py --version 2>&1 | head -n 1)
+    echo -e "${GREEN}✓ PICRUSt2: ${PICRUST_VERSION}${NC}"
+else
+    echo -e "${YELLOW}⚠ PICRUSt2 no disponible${NC}"
+fi
+
+# Verificar fastq-dump
+if command -v fastq-dump &> /dev/null; then
+    echo -e "${GREEN}✓ SRA Toolkit instalado${NC}"
+else
+    echo -e "${YELLOW}⚠ SRA Toolkit no disponible${NC}"
+fi
+
+# Verificar el CLI de la aplicación
+if [[ -f "microbiome_cli.py" ]]; then
+    if python microbiome_cli.py --help &> /dev/null; then
+        echo -e "${GREEN}✓ microbiome_cli.py funcional${NC}"
+    else
+        echo -e "${YELLOW}⚠ Hay problemas con microbiome_cli.py${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ microbiome_cli.py no encontrado${NC}"
+fi
+
+# Instrucciones finales
+echo ""
+echo "=============================================="
+echo -e "${GREEN}✓ ¡Instalación completada!${NC}"
 echo "=============================================="
 echo ""
 echo "Para usar el pipeline:"
 echo ""
-echo "  1. Activar el entorno:"
-echo "     source activate_microbiome.sh"
+echo "1. Activa el entorno:"
+echo -e "   ${GREEN}conda activate ${ENV_NAME}${NC}"
 echo ""
-echo "  2. Probar la instalación:"
-echo "     ./test_installation.sh"
+echo "2. Verifica la instalación:"
+echo -e "   ${GREEN}qiime --help${NC}"
+echo -e "   ${GREEN}python microbiome_cli.py --help${NC}"
 echo ""
-echo "  3. Configurar el pipeline:"
-echo "     Edita config/config.yaml con tus parámetros"
+echo "3. Para desactivar el entorno:"
+echo -e "   ${GREEN}conda deactivate${NC}"
 echo ""
-echo "  4. Ejecutar el pipeline:"
-echo "     python microbiome_cli.py --help"
+echo "4. Para eliminar el entorno (si es necesario):"
+echo -e "   ${GREEN}conda env remove -n ${ENV_NAME}${NC}"
 echo ""
+echo "=============================================="
+echo "Documentación y recursos:"
+echo "  - QIIME2: https://docs.qiime2.org/2024.10/"
+echo "  - Tu repositorio: https://github.com/daxer99/microbiome-pipeline-amplicon"
+echo "=============================================="
