@@ -4,14 +4,15 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Nombre del entorno
-ENV_NAME="qiime2-amplicon-2024.10"
+ENV_NAME="qiime2-amplicon-2024.5"
 
 echo "=============================================="
 echo "   Instalación de Microbiome Pipeline"
-echo "   QIIME2 Amplicon 2024.10"
+echo "   QIIME2 Amplicon 2024.5"
 echo "=============================================="
 echo ""
 
@@ -54,7 +55,7 @@ echo "Sistema detectado: ${OS_TYPE} ${ARCH_TYPE}"
 
 # Determinar URL del archivo de entorno según el sistema
 if [[ "$OS_TYPE" == "Linux" ]]; then
-    QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-linux-conda.yml"
+    QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.5-py39-linux-conda.yml"
     echo "Usando configuración para Linux"
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
     if [[ "$ARCH_TYPE" == "arm64" ]]; then
@@ -63,10 +64,10 @@ elif [[ "$OS_TYPE" == "Darwin" ]]; then
         echo "Configurando instalación en modo Rosetta 2..."
         CONDA_SUBDIR=osx-64
         export CONDA_SUBDIR
-        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
+        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.5-py39-osx-conda.yml"
     else
         # Mac Intel
-        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.10-py310-osx-conda.yml"
+        QIIME_URL="https://data.qiime2.org/distro/amplicon/qiime2-amplicon-2024.5-py39-osx-conda.yml"
         echo "Usando configuración para Mac Intel"
     fi
 else
@@ -151,6 +152,21 @@ else
     exit 1
 fi
 
+# Verificar plugins importantes
+echo ""
+echo "Verificando plugins de QIIME2..."
+if qiime dada2 --help &> /dev/null; then
+    echo -e "${GREEN}✓ Plugin DADA2 disponible${NC}"
+else
+    echo -e "${RED}❌ Plugin DADA2 no disponible${NC}"
+fi
+
+if qiime deblur --help &> /dev/null; then
+    echo -e "${GREEN}✓ Plugin Deblur disponible${NC}"
+else
+    echo -e "${YELLOW}⚠ Plugin Deblur no disponible (usa DADA2 como alternativa)${NC}"
+fi
+
 # Verificar PICRUSt2
 if command -v picrust2_pipeline.py &> /dev/null; then
     PICRUST_VERSION=$(picrust2_pipeline.py --version 2>&1 | head -n 1)
@@ -199,7 +215,20 @@ echo "4. Para eliminar el entorno (si es necesario):"
 echo -e "   ${GREEN}conda env remove -n ${ENV_NAME}${NC}"
 echo ""
 echo "=============================================="
+echo -e "${BLUE}NOTA IMPORTANTE:${NC}"
+echo "QIIME2 2024.5 es la versión estable actual."
+echo "Si necesitas usar Deblur y tienes problemas,"
+echo "considera usar DADA2 como alternativa:"
+echo ""
+echo "  # En lugar de deblur:"
+echo "  qiime deblur denoise-16S ..."
+echo ""
+echo "  # Usa DADA2:"
+echo "  qiime dada2 denoise-single ..."
+echo "  qiime dada2 denoise-paired ..."
+echo ""
+echo "=============================================="
 echo "Documentación y recursos:"
-echo "  - QIIME2: https://docs.qiime2.org/2024.10/"
+echo "  - QIIME2: https://docs.qiime2.org/2024.5/"
 echo "  - Tu repositorio: https://github.com/daxer99/microbiome-pipeline-amplicon"
 echo "=============================================="

@@ -1,11 +1,11 @@
-name: qiime2-amplicon-2024.10
+name: qiime2-amplicon-2024.5
 channels:
-  - https://packages.qiime2.org/qiime2/2024.10/amplicon/released
+  - https://packages.qiime2.org/qiime2/2024.5/amplicon/released
   - conda-forge
   - bioconda
   - defaults
 dependencies:
-  # QIIME2 Amplicon Distribution
+  # QIIME2 Amplicon Distribution 2024.5 (versión estable)
   - qiime2-amplicon
 
   # Herramientas adicionales para análisis de microbioma
@@ -13,5 +13,9 @@ dependencies:
   - sra-tools
 
   # Python y paquetes base
-  - python=3.10
+  - python=3.9
   - pip
+
+  # Paquetes de Python via pip
+  - pip:
+    - dokdo==1.16.0
