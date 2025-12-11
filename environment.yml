@@ -1,21 +1,37 @@
-name: qiime2-amplicon-2024.5
+# QIIME2 Amplicon 2024.2 Environment
+#
+# Official QIIME2 2024.2 distribution with additional tools
+#
+# Installation:
+#   1. Set channel priority to flexible (REQUIRED):
+#      conda config --set channel_priority flexible
+#
+#   2. Create environment:
+#      conda env create -f environment.yml
+#
+#   3. Activate:
+#      conda activate qiime2-amplicon-2024.2
+#
+# Or use the automated setup.sh script for best results.
+
+name: qiime2-amplicon-2024.2
+
 channels:
-  - https://packages.qiime2.org/qiime2/2024.5/amplicon/released
+  - https://packages.qiime2.org/qiime2/2024.2/amplicon/released
   - conda-forge
   - bioconda
   - defaults
-dependencies:
-  # QIIME2 Amplicon Distribution 2024.5 (versión estable)
-  - qiime2-amplicon
 
-  # Herramientas adicionales para análisis de microbioma
+dependencies:
+  # Base QIIME2 2024.2 Amplicon Distribution
+  # All QIIME2 plugins are included in this meta-package
+  - qiime2-amplicon=2024.2.*
+
+  # Additional microbiome analysis tools
   - picrust2
   - sra-tools
 
-  # Python y paquetes base
-  - python=3.9
+  # Python packages
   - pip
-
-  # Paquetes de Python via pip
   - pip:
-    - dokdo==1.16.0
+    - dokdo
