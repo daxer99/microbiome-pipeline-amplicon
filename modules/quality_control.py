@@ -284,21 +284,25 @@ class QualityControl:
             filter_result.filter_stats.save(str(stats_path))
             print(f"  ✓ Estadísticas de filtrado guardadas: {stats_path}")
 
-            # Crear visualización de estadísticas
+            # Crear visualización de estadísticas usando metadata tabulate
             print("  📊 Generando visualización de estadísticas de filtrado...")
-            from qiime2.plugins.metadata.visualizers import tabulate
+            try:
+                from qiime2.plugins.metadata.visualizers import tabulate
 
-            stats_viz = tabulate(filter_result.filter_stats.view(Visualization))
-            stats_viz_path = output_path / "filter_stats.qzv"
-            stats_viz.visualization.save(str(stats_viz_path))
-            print(f"  ✓ Visualización de stats guardada: {stats_viz_path}")
+                # Crear visualización directamente desde el artifact
+                stats_viz = tabulate(filter_result.filter_stats)
+                stats_viz_path = output_path / "filter_stats.qzv"
+                stats_viz.visualization.save(str(stats_viz_path))
+                print(f"  ✓ Visualización de stats guardada: {stats_viz_path}")
+            except Exception as viz_error:
+                print(f"  ⚠️  No se pudo crear visualización de stats: {viz_error}")
+                print(f"  ℹ️  Puedes visualizar el archivo .qza directamente en QIIME2 View")
 
             # Mostrar resumen
             print("\n  📈 Resumen del filtrado:")
             print(f"     - Calidad mínima: {min_quality}")
             print(f"     - Secuencias filtradas: {filtered_path}")
             print(f"     - Estadísticas: {stats_path}")
-            print(f"     - Visualización: {stats_viz_path}")
 
             return str(filtered_path), str(stats_path)
 
