@@ -35,19 +35,6 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-#### 2.1. Manual installation (alternative)
-
-```bash
-# Create environment from YAML
-conda env create -f environment.yml
-
-# Activate environment
-conda activate qiime2-amplicon-2024.2
-
-# Install additional Python packages
-pip install dokdo==1.16.0
-```
-
 #### 3. Install verification
 
 ```bash
