@@ -141,27 +141,71 @@ def import_sample_seqs(manifest_file, output_dir):
 @click.argument('demux_file', type=click.Path(exists=True))
 @click.option('--output-dir', default='results/quality_control',
               help='Directorio de salida (por defecto: results/quality_control)')
-def quality_control(demux_file, output_dir):
-    """Control de calidad simplificado: reportes y gráficos
+@click.option('--filter-sequences', is_flag=True,
+              help='Filtrar secuencias por calidad usando q-score')
+@click.option('--min-quality', default=4, type=int,
+              help='Calidad mínima promedio para filtrado (por defecto: 4)')
+def quality_control(demux_file, output_dir, filter_sequences, min_quality):
+    """Control de calidad con gráficos dokdo y filtrado opcional por q-score
 
     DEMUX_FILE: Ruta al artefacto QIIME2 con secuencias demultiplexadas (.qza)
 
     Genera:
       - Reporte de calidad QIIME2 (.qzv)
-      - Gráficos de perfil de calidad (.png) con dokdo
+      - Gráficos de perfil de calidad con dokdo (.png y .svg)
+      - Opcionalmente: Secuencias filtradas por calidad (.qza)
+
+    El filtrado por q-score usa el método quality-filter q-score de QIIME2,
+    que filtra secuencias basándose en la calidad promedio mínima.
 
     Ejemplos: \n
+      # Solo visualización de calidad
       python microbiome_cli.py quality-control demux.qza --output-dir my_qc
+
+      # Con filtrado de secuencias
+      python microbiome_cli.py quality-control demux.qza --filter-sequences --min-quality 20
+
+      # Filtrado con calidad mínima personalizada
+      python microbiome_cli.py quality-control demux.qza --filter-sequences --min-quality 30 --output-dir filtered_qc
     """
     click.echo(f"🎯 Analizando: {demux_file}")
     click.echo(f"📁 Directorio de salida: {output_dir}")
 
-    qc = QualityControl(demux_file)
-    results = qc.run_quality_control(output_dir)
+    if filter_sequences:
+        click.echo(f"🔬 Filtrado de secuencias: ACTIVADO")
+        click.echo(f"📊 Calidad mínima: {min_quality}")
+    else:
+        click.echo(f"ℹ️  Filtrado de secuencias: DESACTIVADO")
 
-    if results:
-        click.echo(f"✅ Visualización de calidad: {results['quality_viz']}")
-        click.echo(f"✅ Gráfico de calidad: {results['quality_plot']}")
+    try:
+        qc = QualityControl(demux_file)
+        results = qc.run_quality_control(
+            output_dir=output_dir,
+            filter_sequences=filter_sequences,
+            min_quality=min_quality
+        )
+
+        # Mostrar resultados
+        click.echo("\n📋 Archivos generados:")
+        click.echo(f"  ✓ Visualización QIIME2: {results['quality_viz']}")
+
+        if results['quality_plots']:
+            click.echo(f"  ✓ Gráficos de calidad:")
+            for plot_type, plot_path in results['quality_plots'].items():
+                click.echo(f"    - {plot_type}: {plot_path}")
+        else:
+            click.echo(f"  ⚠️  Gráficos dokdo no generados (dokdo no instalado)")
+
+        if results['filtered_seqs']:
+            click.echo(f"  ✓ Secuencias filtradas: {results['filtered_seqs']}")
+            click.echo(f"  ✓ Estadísticas de filtrado: {results['filter_stats']}")
+            click.echo(f"\n💡 Usa las secuencias filtradas para el siguiente paso:")
+            click.echo(f"   python microbiome_cli.py run-deblur {results['filtered_seqs']} ...")
+
+    except Exception as e:
+        click.echo(f"\n❌ Error en control de calidad: {str(e)}")
+        import traceback
+        click.echo(f"📋 Detalles: {traceback.format_exc()}")
 
 
 @cli.command()
