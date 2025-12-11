@@ -81,10 +81,10 @@ python microbiome_cli.py create-manifest --input-dir example/samples --output-fi
 python microbiome_cli.py import-sample-seqs example/manifest.csv --output-dir example
 
 # 4. Quality control
-python microbiome_cli.py quality-control example/demux.qza --output-dir example/qc
+python microbiome_cli.py quality-control example/paired_end_demux.qza --output-dir example/qc
 
 # 5. Denoising with Deblur
-python microbiome_cli.py run-deblur example/demux.qza --left-trim-len 10 --trim-length 125 --jobs-to-start 8 --output-dir example/deblur_results
+python microbiome_cli.py run-deblur example/paired_end_demux.qza --left-trim-len 10 --trim-length 125 --jobs-to-start 8 --output-dir example/deblur_results
 
 # 5.1. Alternative
 python microbiome_cli.py run-deblur example/qc/flitered_seqs.qza --left-trim-len 0 --trim-length 250 --jobs-to-start 8 --output-dir example/deblur_results
