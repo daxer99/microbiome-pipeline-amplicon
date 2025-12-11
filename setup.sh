@@ -180,12 +180,19 @@ fi
 
 # Python packages
 echo ""
-echo "Installing Python packages..."
-echo -n "  dokdo... "
-if pip install --quiet dokdo==1.16.0 2>/dev/null; then
-    echo -e "${GREEN}✓${NC}"
+echo "Installing dokdo from GitHub (official method)..."
+DOKDO_DIR="/tmp/dokdo_install_$"
+if git clone https://github.com/sbslee/dokdo "$DOKDO_DIR" 2>&1 | tail -3; then
+    if (cd "$DOKDO_DIR" && pip install . --quiet); then
+        echo -e "${GREEN}✓ dokdo installed from source${NC}"
+        rm -rf "$DOKDO_DIR"
+    else
+        echo -e "${YELLOW}⚠ dokdo installation had issues${NC}"
+        rm -rf "$DOKDO_DIR"
+    fi
 else
-    echo -e "${YELLOW}⚠${NC}"
+    echo -e "${YELLOW}⚠ Failed to clone dokdo repository${NC}"
+    rm -rf "$DOKDO_DIR"
 fi
 
 # Verification
@@ -241,6 +248,14 @@ if command -v fastq-dump &> /dev/null; then
     echo -e "  ${GREEN}✓${NC} SRA Toolkit ${SRA_V}"
 else
     echo -e "  ${YELLOW}⚠${NC} SRA Toolkit not available"
+fi
+
+# Test dokdo
+if python -c "import dokdo" &> /dev/null; then
+    DOKDO_V=$(python -c "import dokdo; print(dokdo.__version__)" 2>/dev/null || echo "installed")
+    echo -e "  ${GREEN}✓${NC} dokdo ${DOKDO_V}"
+else
+    echo -e "  ${YELLOW}⚠${NC} dokdo not available"
 fi
 
 # Test microbiome_cli.py

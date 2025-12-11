@@ -31,7 +31,11 @@ dependencies:
   - picrust2
   - sra-tools
 
-  # Python packages
+  # Python and tools needed for dokdo installation
   - pip
-  - pip:
-    - dokdo
+  - git
+
+  # Note: dokdo should be installed from source after environment creation:
+  # git clone https://github.com/sbslee/dokdo
+  # cd dokdo
+  # pip install .
