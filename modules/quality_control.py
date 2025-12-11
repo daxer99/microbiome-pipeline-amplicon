@@ -298,6 +298,33 @@ class QualityControl:
                 print(f"  ⚠️  No se pudo crear visualización de stats: {viz_error}")
                 print(f"  ℹ️  Puedes visualizar el archivo .qza directamente en QIIME2 View")
 
+            # Generar gráficos de calidad de las secuencias FILTRADAS
+            if DOKDO_AVAILABLE:
+                print("\n  📈 Generando gráficos de calidad de secuencias FILTRADAS...")
+                try:
+                    # Crear visualización de calidad para las secuencias filtradas
+                    print("    → Creando visualización de calidad QIIME2...")
+                    filtered_quality_viz = summarize(filter_result.filtered_sequences)
+                    filtered_viz_path = output_path / "filtered_quality.qzv"
+                    filtered_quality_viz.visualization.save(str(filtered_viz_path))
+                    print(f"    ✓ Visualización guardada: {filtered_viz_path}")
+
+                    # Generar gráficos dokdo de las secuencias filtradas
+                    filtered_plots = self._plot_filtered_quality(
+                        str(filtered_viz_path),
+                        output_path
+                    )
+
+                    if filtered_plots:
+                        print(f"    ✓ Gráficos de secuencias filtradas generados:")
+                        for plot_type, plot_path in filtered_plots.items():
+                            print(f"      - {plot_type}: {plot_path}")
+
+                except Exception as plot_error:
+                    print(f"    ⚠️  Error generando gráficos de filtradas: {plot_error}")
+            else:
+                print("\n  ⚠️  dokdo no disponible, saltando gráficos de secuencias filtradas")
+
             # Mostrar resumen
             print("\n  📈 Resumen del filtrado:")
             print(f"     - Calidad mínima: {min_quality}")
@@ -311,6 +338,134 @@ class QualityControl:
             import traceback
             print(f"  📋 Detalles: {traceback.format_exc()}")
             raise
+
+    def _plot_filtered_quality(self, filtered_viz_path, output_path):
+        """
+        Genera gráficos de perfil de calidad para secuencias filtradas usando dokdo
+
+        Args:
+            filtered_viz_path: Path al archivo .qzv de calidad de secuencias filtradas
+            output_path: Path object para el directorio de salida
+
+        Returns:
+            dict: Paths a los archivos PNG generados
+        """
+        if not DOKDO_AVAILABLE:
+            return None
+
+        print("    📊 Generando gráficos con dokdo...")
+
+        # Configurar estilo de seaborn
+        sns.set_style("whitegrid")
+
+        plot_paths = {}
+
+        try:
+            # Crear figura con 2 subplots (forward y reverse)
+            fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(14, 6))
+
+            # Plot forward reads
+            print("      → Forward reads...")
+            try:
+                dokdo.read_quality_plot(
+                    filtered_viz_path,
+                    strand='forward',
+                    ax=ax1
+                )
+                ax1.set_title('Filtered Forward Read - Quality Profile',
+                              fontsize=14, fontweight='bold', color='darkgreen')
+                ax1.set_xlabel('Position (bp)', fontsize=12)
+                ax1.set_ylabel('Quality Score', fontsize=12)
+            except Exception as e:
+                print(f"      ⚠️  Error plotting forward reads: {e}")
+                ax1.text(0.5, 0.5, 'Forward reads\nnot available',
+                         ha='center', va='center', fontsize=14,
+                         transform=ax1.transAxes)
+
+            # Plot reverse reads
+            print("      → Reverse reads...")
+            try:
+                dokdo.read_quality_plot(
+                    filtered_viz_path,
+                    strand='reverse',
+                    ax=ax2
+                )
+                ax2.set_title('Filtered Reverse Read - Quality Profile',
+                              fontsize=14, fontweight='bold', color='darkgreen')
+                ax2.set_xlabel('Position (bp)', fontsize=12)
+                ax2.set_ylabel('')  # Ocultar ylabel para el segundo gráfico
+                ax2.set_yticklabels([])  # Ocultar etiquetas del eje Y
+            except Exception as e:
+                print(f"      ⚠️  Error plotting reverse reads: {e}")
+                ax2.text(0.5, 0.5, 'Reverse reads\nnot available',
+                         ha='center', va='center', fontsize=14,
+                         transform=ax2.transAxes)
+
+            # Ajustar diseño
+            plt.tight_layout()
+
+            # Guardar figura combinada con prefijo "filtered_"
+            combined_path = output_path / "filtered_quality_profile_combined.png"
+            plt.savefig(combined_path, dpi=300, bbox_inches='tight')
+            plot_paths['combined'] = str(combined_path)
+
+            # También guardar como SVG
+            combined_svg = output_path / "filtered_quality_profile_combined.svg"
+            plt.savefig(combined_svg, bbox_inches='tight')
+            plot_paths['combined_svg'] = str(combined_svg)
+
+            plt.close(fig)
+
+            # Crear gráficos individuales
+            # Forward solo
+            fig_f, ax_f = plt.subplots(1, 1, figsize=(10, 6))
+            try:
+                dokdo.read_quality_plot(
+                    filtered_viz_path,
+                    strand='forward',
+                    ax=ax_f
+                )
+                ax_f.set_title('Filtered Forward Read - Quality Profile',
+                               fontsize=14, fontweight='bold', color='darkgreen')
+                ax_f.set_xlabel('Position (bp)', fontsize=12)
+                ax_f.set_ylabel('Quality Score', fontsize=12)
+
+                forward_path = output_path / "filtered_quality_profile_forward.png"
+                plt.savefig(forward_path, dpi=300, bbox_inches='tight')
+                plot_paths['forward'] = str(forward_path)
+            except Exception as e:
+                print(f"      ⚠️  No se pudo crear gráfico forward: {e}")
+            finally:
+                plt.close(fig_f)
+
+            # Reverse solo
+            fig_r, ax_r = plt.subplots(1, 1, figsize=(10, 6))
+            try:
+                dokdo.read_quality_plot(
+                    filtered_viz_path,
+                    strand='reverse',
+                    ax=ax_r
+                )
+                ax_r.set_title('Filtered Reverse Read - Quality Profile',
+                               fontsize=14, fontweight='bold', color='darkgreen')
+                ax_r.set_xlabel('Position (bp)', fontsize=12)
+                ax_r.set_ylabel('Quality Score', fontsize=12)
+
+                reverse_path = output_path / "filtered_quality_profile_reverse.png"
+                plt.savefig(reverse_path, dpi=300, bbox_inches='tight')
+                plot_paths['reverse'] = str(reverse_path)
+            except Exception as e:
+                print(f"      ⚠️  No se pudo crear gráfico reverse: {e}")
+            finally:
+                plt.close(fig_r)
+
+        except Exception as e:
+            print(f"    ❌ Error generando gráficos: {e}")
+            import traceback
+            print(f"    📋 Detalles: {traceback.format_exc()}")
+            return None
+
+        return plot_paths
 
     def get_visualization(self):
         """Retorna la visualización de calidad"""

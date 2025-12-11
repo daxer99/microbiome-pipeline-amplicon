@@ -143,7 +143,7 @@ def import_sample_seqs(manifest_file, output_dir):
               help='Directorio de salida (por defecto: results/quality_control)')
 @click.option('--filter-sequences', is_flag=True,
               help='Filtrar secuencias por calidad usando q-score')
-@click.option('--min-quality', default=4, type=int,
+@click.option('--min-quality', default=15, type=int,
               help='Calidad mínima promedio para filtrado (por defecto: 4)')
 def quality_control(demux_file, output_dir, filter_sequences, min_quality):
     """Control de calidad con gráficos dokdo y filtrado opcional por q-score
