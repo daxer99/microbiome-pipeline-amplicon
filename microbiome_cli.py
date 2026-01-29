@@ -321,6 +321,9 @@ def assign_taxonomy(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus
         click.echo(f"   - taxa_barplot.qzv (visualización QIIME2)")
     except Exception as e:
         click.echo(f"❌ Error en asignación taxonómica: {str(e)}")
+        import traceback
+        click.echo(f"🔍 Stack trace completo:")
+        click.echo(traceback.format_exc())
 
 @cli.command()
 @click.argument('rep_seqs', type=click.Path(exists=True))
