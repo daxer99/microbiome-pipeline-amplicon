@@ -58,6 +58,9 @@ def taxa_assigner(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus, 
         threads=cpus
     )
 
+    # Guardar la clasificación taxonómica
+    taxonomy.classification.save(f"{output_folder}/taxonomy.qza")
+
     # Crear barplot de taxonomía
     taxa_barplot = barplot(
         table=table,
@@ -72,26 +75,50 @@ def taxa_assigner(table, rep_seqs, seqs_ref, taxa_ref, metadata_filename, cpus, 
     with tempfile.TemporaryDirectory() as tmpdir:
         taxa_barplot.export_data(tmpdir)
         data_dir_fp = pathlib.Path(tmpdir)
-        csv_fps = sorted(data_dir_fp.glob('level-*csv'))
+        csv_fps = sorted(data_dir_fp.glob('level-*.csv'))
 
         for csv_fp in csv_fps:
             df_barplot = pd.read_csv(csv_fp, index_col='index')
             csvs_barplot.append(df_barplot)
 
-    # Generar archivos CSV para cada nivel taxonómico
+    # Mapeo correcto de índices (QIIME2 empieza en level-1, level-2, etc.)
+    # Los archivos CSV están ordenados, así que:
+    # csvs_barplot[0] = level-1 (Kingdom/Domain)
+    # csvs_barplot[1] = level-2 (Phylum)
+    # csvs_barplot[2] = level-3 (Class)
+    # csvs_barplot[3] = level-4 (Order)
+    # csvs_barplot[4] = level-5 (Family)
+    # csvs_barplot[5] = level-6 (Genus)
+    # csvs_barplot[6] = level-7 (Species)
+
+    # Definir niveles taxonómicos según QIIME2
     levels = {
-        1: "phylum",
-        2: "class",
-        3: "order",
-        4: "family",
-        5: "genus",
-        -1: "species"  # Último nivel para especies
+        1: "phylum",  # csvs_barplot[1]
+        2: "class",  # csvs_barplot[2]
+        3: "order",  # csvs_barplot[3]
+        4: "family",  # csvs_barplot[4]
+        5: "genus",  # csvs_barplot[5]
+        6: "species"  # csvs_barplot[6]
     }
 
+    # Generar archivos CSV para cada nivel taxonómico
     for level_idx, level_name in levels.items():
-        df_level = csvs_barplot[level_idx].T
-        df_level.drop(df_level.index[-1], inplace=True)  # Eliminar fila "Unknown"
-        df_level = normalized_df(df_level)
-        df_level.to_csv(f"{output_folder}/{level_name}.csv")
+        # Verificar que el índice existe en csvs_barplot
+        if level_idx < len(csvs_barplot):
+            df_level = csvs_barplot[level_idx].T
+
+            # Eliminar fila "Unknown" si existe
+            if df_level.index[-1] == "Unknown":
+                df_level = df_level.drop(df_level.index[-1])
+
+            # Normalizar a porcentajes
+            df_level = normalized_df(df_level)
+
+            # Guardar CSV
+            output_file = f"{output_folder}/{level_name}.csv"
+            df_level.to_csv(output_file)
+            print(f"✅ Archivo generado: {output_file}")
+        else:
+            print(f"⚠️  Advertencia: No se encontró nivel {level_name} (índice {level_idx}) en los resultados")
 
     return f"Archivos taxonómicos generados en: {output_folder}"
